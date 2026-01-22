@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Google.Cloud.Firestore;
 using API_DigiBook.Models;
 using API_DigiBook.Repositories;
+using API_DigiBook.Services;
 
 namespace API_DigiBook.Controllers
 {
@@ -11,11 +12,13 @@ namespace API_DigiBook.Controllers
     {
         private readonly IBookRepository _bookRepository;
         private readonly ILogger<BooksController> _logger;
+        private readonly LoggerService _systemLogger;
 
         public BooksController(IBookRepository bookRepository, ILogger<BooksController> logger)
         {
             _bookRepository = bookRepository;
             _logger = logger;
+            _systemLogger = LoggerService.Instance; // Get singleton instance
         }
 
         /// <summary>
@@ -77,23 +80,44 @@ namespace API_DigiBook.Controllers
         }
 
         /// <summary>
-        /// Get book by ID
+        /// Get book by ISBN
         /// </summary>
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetBookById(string id)
+        [HttpGet("isbn/{isbn}")]
+        public async Task<IActionResult> GetBookByIsbn(string isbn)
         {
             try
             {
-                var book = await _bookRepository.GetByIdAsync(id);
+                // Log request
+                await _systemLogger.LogInfoAsync(
+                    "GET_BOOK_BY_ISBN",
+                    $"Request to get book with ISBN: {isbn}",
+                    "Anonymous"
+                );
+
+                var book = await _bookRepository.GetByIsbnAsync(isbn);
 
                 if (book == null)
                 {
+                    // Log not found
+                    await _systemLogger.LogWarningAsync(
+                        "BOOK_NOT_FOUND",
+                        $"Book with ISBN '{isbn}' not found",
+                        "Anonymous"
+                    );
+
                     return NotFound(new
                     {
                         success = false,
-                        message = $"Book with ID '{id}' not found"
+                        message = $"Book with ISBN '{isbn}' not found"
                     });
                 }
+
+                // Log success
+                await _systemLogger.LogSuccessAsync(
+                    "GET_BOOK_BY_ISBN",
+                    $"Successfully retrieved book: {book.Title} (ISBN: {isbn})",
+                    "Anonymous"
+                );
 
                 return Ok(new
                 {
@@ -103,7 +127,15 @@ namespace API_DigiBook.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting book by ID: {Id}", id);
+                _logger.LogError(ex, "Error getting book by ISBN: {Isbn}", isbn);
+                
+                // Log error to system
+                await _systemLogger.LogErrorAsync(
+                    "GET_BOOK_BY_ISBN",
+                    $"Error getting book with ISBN '{isbn}': {ex.Message}",
+                    "Anonymous"
+                );
+
                 return StatusCode(500, new
                 {
                     success = false,
@@ -127,7 +159,14 @@ namespace API_DigiBook.Controllers
                 var bookId = await _bookRepository.AddAsync(book, book.Id);
                 book.Id = bookId;
 
-                return CreatedAtAction(nameof(GetBookById), new { id = book.Id }, new
+                // Log success
+                await _systemLogger.LogSuccessAsync(
+                    "CREATE_BOOK",
+                    $"Book created: {book.Title} (ISBN: {book.Isbn}, ID: {bookId})",
+                    "Admin"
+                );
+
+                return CreatedAtAction(nameof(GetBookByIsbn), new { isbn = book.Isbn }, new
                 {
                     success = true,
                     message = "Book created successfully",
@@ -137,6 +176,14 @@ namespace API_DigiBook.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating book");
+                
+                // Log error
+                await _systemLogger.LogErrorAsync(
+                    "CREATE_BOOK",
+                    $"Failed to create book: {ex.Message}",
+                    "Admin"
+                );
+
                 return StatusCode(500, new
                 {
                     success = false,
@@ -199,12 +246,25 @@ namespace API_DigiBook.Controllers
 
                 if (!deleted)
                 {
+                    await _systemLogger.LogWarningAsync(
+                        "DELETE_BOOK",
+                        $"Attempted to delete non-existent book with ID: {id}",
+                        "Admin"
+                    );
+
                     return NotFound(new
                     {
                         success = false,
                         message = $"Book with ID '{id}' not found"
                     });
                 }
+
+                // Log success
+                await _systemLogger.LogSuccessAsync(
+                    "DELETE_BOOK",
+                    $"Book with ID '{id}' was deleted",
+                    "Admin"
+                );
 
                 return Ok(new
                 {
@@ -215,6 +275,13 @@ namespace API_DigiBook.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting book with ID: {Id}", id);
+                
+                await _systemLogger.LogErrorAsync(
+                    "DELETE_BOOK",
+                    $"Error deleting book with ID '{id}': {ex.Message}",
+                    "Admin"
+                );
+
                 return StatusCode(500, new
                 {
                     success = false,

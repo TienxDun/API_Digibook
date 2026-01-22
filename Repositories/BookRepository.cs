@@ -10,6 +10,38 @@ namespace API_DigiBook.Repositories
         {
         }
 
+        public async Task<Book?> GetByIsbnAsync(string isbn)
+        {
+            try
+            {
+                var query = _db.Collection(_collectionName)
+                    .WhereEqualTo("isbn", isbn)
+                    .Limit(1);
+                
+                var snapshot = await query.GetSnapshotAsync();
+
+                if (snapshot.Documents.Count == 0)
+                {
+                    return null;
+                }
+
+                var document = snapshot.Documents[0];
+                if (document.Exists)
+                {
+                    var book = document.ConvertTo<Book>();
+                    book.Id = document.Id;
+                    return book;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting book by ISBN {Isbn}", isbn);
+                throw;
+            }
+        }
+
         public async Task<IEnumerable<Book>> GetByAuthorAsync(string authorId)
         {
             try

@@ -44,6 +44,9 @@ namespace API_DigiBook
             builder.Services.AddScoped<API_DigiBook.Repositories.IReviewRepository, API_DigiBook.Repositories.ReviewRepository>();
             builder.Services.AddScoped<API_DigiBook.Repositories.ICouponRepository, API_DigiBook.Repositories.CouponRepository>();
             
+            // Register Command Pattern services
+            builder.Services.AddScoped<API_DigiBook.Commands.CommandInvoker>();
+            
             // Add CORS policy
             builder.Services.AddCors(options =>
             {
@@ -76,6 +79,31 @@ namespace API_DigiBook
             app.MapControllers();
 
             Console.WriteLine("🚀 API_DigiBook is running...");
+            Console.WriteLine($"📖 Swagger UI: {app.Urls.FirstOrDefault() ?? "http://localhost:5197"}/swagger");
+            
+            // Auto-open browser to Swagger (works with dotnet run)
+            if (app.Environment.IsDevelopment())
+            {
+                var url = app.Urls.FirstOrDefault() ?? "http://localhost:5197";
+                var swaggerUrl = $"{url}/swagger";
+                
+                try
+                {
+                    // Open browser automatically
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = swaggerUrl,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                    Console.WriteLine($"✅ Browser opened: {swaggerUrl}");
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine($"💡 Please open: {swaggerUrl}");
+                }
+            }
+
             app.Run();
         }
     }

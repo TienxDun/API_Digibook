@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Google.Cloud.Firestore;
 using API_DigiBook.Models;
 using API_DigiBook.Repositories;
+using API_DigiBook.Commands;
+using API_DigiBook.Commands.Orders;
 
 namespace API_DigiBook.Controllers
 {
@@ -11,11 +13,16 @@ namespace API_DigiBook.Controllers
     {
         private readonly IOrderRepository _orderRepository;
         private readonly ILogger<OrdersController> _logger;
+        private readonly CommandInvoker _commandInvoker;
 
-        public OrdersController(IOrderRepository orderRepository, ILogger<OrdersController> logger)
+        public OrdersController(
+            IOrderRepository orderRepository, 
+            ILogger<OrdersController> logger,
+            CommandInvoker commandInvoker)
         {
             _orderRepository = orderRepository;
             _logger = logger;
+            _commandInvoker = commandInvoker;
         }
 
         /// <summary>
@@ -172,158 +179,182 @@ namespace API_DigiBook.Controllers
         }
 
         /// <summary>
-        /// Create a new order
+        /// Create a new order using Command Pattern
         /// </summary>
         [HttpPost]
         public async Task<IActionResult> CreateOrder([FromBody] Order order)
         {
-            try
+            var command = new CreateOrderCommand(order, _orderRepository, _logger);
+            var result = await _commandInvoker.ExecuteAsync(command);
+
+            if (result.Success)
             {
-                order.CreatedAt = Timestamp.GetCurrentTimestamp();
-                order.UpdatedAt = Timestamp.GetCurrentTimestamp();
-
-                var orderId = await _orderRepository.AddAsync(order, order.Id);
-                order.Id = orderId;
-
-                return CreatedAtAction(nameof(GetOrderById), new { id = order.Id }, new
+                var createdOrder = result.Data as Order;
+                return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder?.Id }, new
                 {
                     success = true,
-                    message = "Order created successfully",
-                    data = order
+                    message = result.Message,
+                    data = result.Data
                 });
             }
-            catch (Exception ex)
+
+            return BadRequest(new
             {
-                _logger.LogError(ex, "Error creating order");
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = "Error creating order",
-                    error = ex.Message
-                });
-            }
+                success = false,
+                message = result.Message,
+                error = result.Error
+            });
         }
 
         /// <summary>
-        /// Update an existing order
+        /// Update an existing order using Command Pattern
         /// </summary>
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateOrder(string id, [FromBody] Order order)
         {
-            try
+            var command = new UpdateOrderCommand(id, order, _orderRepository, _logger);
+            var result = await _commandInvoker.ExecuteAsync(command);
+
+            if (result.Success)
             {
-                order.Id = id;
-                order.UpdatedAt = Timestamp.GetCurrentTimestamp();
-
-                var updated = await _orderRepository.UpdateAsync(id, order);
-
-                if (!updated)
-                {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = $"Order with ID '{id}' not found"
-                    });
-                }
-
                 return Ok(new
                 {
                     success = true,
-                    message = "Order updated successfully",
-                    data = order
+                    message = result.Message,
+                    data = result.Data
                 });
             }
-            catch (Exception ex)
+
+            if (result.Message.Contains("not found"))
             {
-                _logger.LogError(ex, "Error updating order with ID: {Id}", id);
-                return StatusCode(500, new
+                return NotFound(new
                 {
                     success = false,
-                    message = "Error updating order",
-                    error = ex.Message
+                    message = result.Message,
+                    error = result.Error
                 });
             }
+
+            return BadRequest(new
+            {
+                success = false,
+                message = result.Message,
+                error = result.Error
+            });
         }
 
         /// <summary>
-        /// Update order status
+        /// Update order status using Command Pattern
         /// </summary>
         [HttpPatch("{id}/status")]
         public async Task<IActionResult> UpdateOrderStatus(string id, [FromBody] UpdateStatusRequest request)
         {
-            try
+            var command = new UpdateOrderStatusCommand(
+                id, 
+                request.Status, 
+                request.StatusStep, 
+                _orderRepository, 
+                _logger);
+            
+            var result = await _commandInvoker.ExecuteAsync(command);
+
+            if (result.Success)
             {
-                var updates = new Dictionary<string, object>
-                {
-                    { "status", request.Status },
-                    { "statusStep", request.StatusStep },
-                    { "updatedAt", Timestamp.GetCurrentTimestamp() }
-                };
-
-                var updated = await _orderRepository.UpdateFieldsAsync(id, updates);
-
-                if (!updated)
-                {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = $"Order with ID '{id}' not found"
-                    });
-                }
-
                 return Ok(new
                 {
                     success = true,
-                    message = "Order status updated successfully"
+                    message = result.Message
                 });
             }
-            catch (Exception ex)
+
+            if (result.Message.Contains("not found"))
             {
-                _logger.LogError(ex, "Error updating order status: {Id}", id);
-                return StatusCode(500, new
+                return NotFound(new
                 {
                     success = false,
-                    message = "Error updating order status",
-                    error = ex.Message
+                    message = result.Message,
+                    error = result.Error
                 });
             }
+
+            return BadRequest(new
+            {
+                success = false,
+                message = result.Message,
+                error = result.Error
+            });
         }
 
         /// <summary>
-        /// Delete an order
+        /// Delete an order using Command Pattern
         /// </summary>
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOrder(string id)
         {
-            try
+            var command = new DeleteOrderCommand(id, _orderRepository, _logger);
+            var result = await _commandInvoker.ExecuteAsync(command);
+
+            if (result.Success)
             {
-                var deleted = await _orderRepository.DeleteAsync(id);
-
-                if (!deleted)
-                {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = $"Order with ID '{id}' not found"
-                    });
-                }
-
                 return Ok(new
                 {
                     success = true,
-                    message = "Order deleted successfully"
+                    message = result.Message
                 });
             }
-            catch (Exception ex)
+
+            if (result.Message.Contains("not found"))
             {
-                _logger.LogError(ex, "Error deleting order with ID: {Id}", id);
-                return StatusCode(500, new
+                return NotFound(new
                 {
                     success = false,
-                    message = "Error deleting order",
-                    error = ex.Message
+                    message = result.Message,
+                    error = result.Error
                 });
             }
+
+            return BadRequest(new
+            {
+                success = false,
+                message = result.Message,
+                error = result.Error
+            });
+        }
+
+        /// <summary>
+        /// Cancel an order using Command Pattern
+        /// </summary>
+        [HttpPost("{id}/cancel")]
+        public async Task<IActionResult> CancelOrder(string id, [FromBody] CancelOrderRequest request)
+        {
+            var command = new CancelOrderCommand(id, request.Reason ?? "", _orderRepository, _logger);
+            var result = await _commandInvoker.ExecuteAsync(command);
+
+            if (result.Success)
+            {
+                return Ok(new
+                {
+                    success = true,
+                    message = result.Message
+                });
+            }
+
+            if (result.Message.Contains("not found"))
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = result.Message,
+                    error = result.Error
+                });
+            }
+
+            return BadRequest(new
+            {
+                success = false,
+                message = result.Message,
+                error = result.Error
+            });
         }
     }
 
@@ -331,5 +362,10 @@ namespace API_DigiBook.Controllers
     {
         public string Status { get; set; } = string.Empty;
         public int StatusStep { get; set; }
+    }
+
+    public class CancelOrderRequest
+    {
+        public string? Reason { get; set; }
     }
 }

@@ -4,6 +4,7 @@ namespace API_DigiBook.Repositories
 {
     public interface IBookRepository : IRepository<Book>
     {
+        Task<Book?> GetByIsbnAsync(string isbn);
         Task<IEnumerable<Book>> GetByAuthorAsync(string authorId);
         Task<IEnumerable<Book>> GetByCategoryAsync(string category);
         Task<IEnumerable<Book>> SearchByTitleAsync(string title);
