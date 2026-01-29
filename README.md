@@ -224,6 +224,8 @@ public class BooksController : ControllerBase
   - `GetTopRatedAsync(count)`
   - `IncrementViewCountAsync(bookId)` 🆕
   - `GetByIdsAsync(bookIds)` 🆕
+  - `UpdateByIsbnAsync(isbn, book)` 🆕
+  - `DeleteByIsbnAsync(isbn)` 🆕
 
 - **IUserRepository:**
   - `GetByEmailAsync(email)`
@@ -303,25 +305,24 @@ public class BooksController : ControllerBase
 
 ### 📚 Books API (11 endpoints)
 
-#### Basic CRUD
+#### Basic CRUD (ISBN-based)
 ```http
-GET    /api/books              # Get all books
-GET    /api/books/{id}         # Get book by ID (auto increment view) 🆕
-POST   /api/books              # Create new book
-PUT    /api/books/{id}         # Update book
-DELETE /api/books/{id}         # Delete book
+GET    /api/books                  # Get all books
+GET    /api/books/isbn/{isbn}      # Get book by ISBN
+POST   /api/books                  # Create new book
+PUT    /api/books/isbn/{isbn}      # Update book by ISBN
+DELETE /api/books/isbn/{isbn}      # Delete book by ISBN
 ```
 
 #### Advanced Queries
 ```http
 GET  /api/books/test-connection     # Test Firebase connection
-GET  /api/books/isbn/{isbn}         # Get book by ISBN
 GET  /api/books/slug/{slug}         # Get book by slug (SEO) 🆕
 GET  /api/books/author/{authorId}   # Get books by author
 GET  /api/books/category/{category} # Get books by category
 GET  /api/books/search?title={name} # Search books by title
 GET  /api/books/top-rated?count=10  # Get top rated books
-POST /api/books/by-ids              # Get multiple books by IDs 🆕
+POST /api/books/by-ids              # Get multiple books by IDs (for wishlist) 🆕
 ```
 
 ### 💰 Pricing API (3 endpoints) 🆕

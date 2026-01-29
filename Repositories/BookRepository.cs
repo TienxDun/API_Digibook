@@ -15,26 +15,10 @@ namespace API_DigiBook.Repositories
         {
             try
             {
-                var query = _db.Collection(_collectionName)
-                    .WhereEqualTo("isbn", isbn)
-                    .Limit(1);
-                
-                var snapshot = await query.GetSnapshotAsync();
-
-                if (snapshot.Documents.Count == 0)
-                {
-                    return null;
-                }
-
-                var document = snapshot.Documents[0];
-                if (document.Exists)
-                {
-                    var book = document.ConvertTo<Book>();
-                    book.Id = document.Id;
-                    return book;
-                }
-
-                return null;
+                // Firestore queries are case-sensitive, so we fetch all and filter
+                var allBooks = await GetAllAsync();
+                return allBooks.FirstOrDefault(b => 
+                    string.Equals(b.Isbn, isbn, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex)
             {
@@ -76,23 +60,10 @@ namespace API_DigiBook.Repositories
         {
             try
             {
-                var query = _db.Collection(_collectionName)
-                    .WhereEqualTo("category", category);
-                
-                var snapshot = await query.GetSnapshotAsync();
-                var books = new List<Book>();
-
-                foreach (var document in snapshot.Documents)
-                {
-                    if (document.Exists)
-                    {
-                        var book = document.ConvertTo<Book>();
-                        book.Id = document.Id;
-                        books.Add(book);
-                    }
-                }
-
-                return books;
+                // Case-insensitive category search
+                var allBooks = await GetAllAsync();
+                return allBooks.Where(b => 
+                    string.Equals(b.Category, category, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex)
             {
@@ -152,26 +123,10 @@ namespace API_DigiBook.Repositories
         {
             try
             {
-                var query = _db.Collection(_collectionName)
-                    .WhereEqualTo("slug", slug)
-                    .Limit(1);
-                
-                var snapshot = await query.GetSnapshotAsync();
-
-                if (snapshot.Documents.Count == 0)
-                {
-                    return null;
-                }
-
-                var document = snapshot.Documents[0];
-                if (document.Exists)
-                {
-                    var book = document.ConvertTo<Book>();
-                    book.Id = document.Id;
-                    return book;
-                }
-
-                return null;
+                // Case-insensitive slug search
+                var allBooks = await GetAllAsync();
+                return allBooks.FirstOrDefault(b => 
+                    string.Equals(b.Slug, slug, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex)
             {
@@ -243,6 +198,51 @@ namespace API_DigiBook.Repositories
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error getting books by IDs");
+                throw;
+            }
+        }
+
+        public async Task<bool> UpdateByIsbnAsync(string isbn, Book book)
+        {
+            try
+            {
+                // Find the book by ISBN first
+                var existingBook = await GetByIsbnAsync(isbn);
+                
+                if (existingBook == null)
+                {
+                    return false;
+                }
+
+                // Update using the document ID
+                book.UpdatedAt = Timestamp.GetCurrentTimestamp();
+                return await UpdateAsync(existingBook.Id, book);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error updating book by ISBN {Isbn}", isbn);
+                throw;
+            }
+        }
+
+        public async Task<bool> DeleteByIsbnAsync(string isbn)
+        {
+            try
+            {
+                // Find the book by ISBN first
+                var existingBook = await GetByIsbnAsync(isbn);
+                
+                if (existingBook == null)
+                {
+                    return false;
+                }
+
+                // Delete using the document ID
+                return await DeleteAsync(existingBook.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error deleting book by ISBN {Isbn}", isbn);
                 throw;
             }
         }

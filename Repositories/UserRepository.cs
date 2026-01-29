@@ -15,21 +15,10 @@ namespace API_DigiBook.Repositories
         {
             try
             {
-                var query = _db.Collection(_collectionName)
-                    .WhereEqualTo("email", email)
-                    .Limit(1);
-                
-                var snapshot = await query.GetSnapshotAsync();
-                
-                if (snapshot.Documents.Count == 0)
-                {
-                    return null;
-                }
-
-                var document = snapshot.Documents[0];
-                var user = document.ConvertTo<User>();
-                user.Id = document.Id;
-                return user;
+                // Case-insensitive email search
+                var allUsers = await GetAllAsync();
+                return allUsers.FirstOrDefault(u => 
+                    string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex)
             {
@@ -42,23 +31,10 @@ namespace API_DigiBook.Repositories
         {
             try
             {
-                var query = _db.Collection(_collectionName)
-                    .WhereEqualTo("role", role);
-                
-                var snapshot = await query.GetSnapshotAsync();
-                var users = new List<User>();
-
-                foreach (var document in snapshot.Documents)
-                {
-                    if (document.Exists)
-                    {
-                        var user = document.ConvertTo<User>();
-                        user.Id = document.Id;
-                        users.Add(user);
-                    }
-                }
-
-                return users;
+                // Case-insensitive role search
+                var allUsers = await GetAllAsync();
+                return allUsers.Where(u => 
+                    string.Equals(u.Role, role, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex)
             {
@@ -71,23 +47,10 @@ namespace API_DigiBook.Repositories
         {
             try
             {
-                var query = _db.Collection(_collectionName)
-                    .WhereEqualTo("status", status);
-                
-                var snapshot = await query.GetSnapshotAsync();
-                var users = new List<User>();
-
-                foreach (var document in snapshot.Documents)
-                {
-                    if (document.Exists)
-                    {
-                        var user = document.ConvertTo<User>();
-                        user.Id = document.Id;
-                        users.Add(user);
-                    }
-                }
-
-                return users;
+                // Case-insensitive status search
+                var allUsers = await GetAllAsync();
+                return allUsers.Where(u => 
+                    string.Equals(u.Status, status, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex)
             {

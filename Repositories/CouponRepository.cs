@@ -15,8 +15,10 @@ namespace API_DigiBook.Repositories
         {
             try
             {
-                // Coupon uses code as document ID (uppercase)
-                return await GetByIdAsync(code.ToUpper());
+                // Case-insensitive coupon code search
+                var allCoupons = await GetAllAsync();
+                return allCoupons.FirstOrDefault(c => 
+                    string.Equals(c.Code, code, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex)
             {

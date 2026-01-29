@@ -194,26 +194,38 @@ namespace API_DigiBook.Controllers
         }
 
         /// <summary>
-        /// Update an existing book
+        /// Update an existing book by ISBN
         /// </summary>
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateBook(string id, [FromBody] Book book)
+        [HttpPut("isbn/{isbn}")]
+        public async Task<IActionResult> UpdateBook(string isbn, [FromBody] Book book)
         {
             try
             {
-                book.Id = id;
+                book.Isbn = isbn;
                 book.UpdatedAt = Timestamp.GetCurrentTimestamp();
                 
-                var updated = await _bookRepository.UpdateAsync(id, book);
+                var updated = await _bookRepository.UpdateByIsbnAsync(isbn, book);
 
                 if (!updated)
                 {
+                    await _systemLogger.LogWarningAsync(
+                        "UPDATE_BOOK",
+                        $"Attempted to update non-existent book with ISBN: {isbn}",
+                        "Admin"
+                    );
+
                     return NotFound(new
                     {
                         success = false,
-                        message = $"Book with ID '{id}' not found"
+                        message = $"Book with ISBN '{isbn}' not found"
                     });
                 }
+
+                await _systemLogger.LogSuccessAsync(
+                    "UPDATE_BOOK",
+                    $"Book updated: {book.Title} (ISBN: {isbn})",
+                    "Admin"
+                );
 
                 return Ok(new
                 {
@@ -224,7 +236,14 @@ namespace API_DigiBook.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error updating book with ID: {Id}", id);
+                _logger.LogError(ex, "Error updating book with ISBN: {Isbn}", isbn);
+                
+                await _systemLogger.LogErrorAsync(
+                    "UPDATE_BOOK",
+                    $"Error updating book with ISBN '{isbn}': {ex.Message}",
+                    "Admin"
+                );
+
                 return StatusCode(500, new
                 {
                     success = false,
@@ -235,34 +254,37 @@ namespace API_DigiBook.Controllers
         }
 
         /// <summary>
-        /// Delete a book
+        /// Delete a book by ISBN
         /// </summary>
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteBook(string id)
+        [HttpDelete("isbn/{isbn}")]
+        public async Task<IActionResult> DeleteBook(string isbn)
         {
             try
             {
-                var deleted = await _bookRepository.DeleteAsync(id);
+                // Get book first to retrieve title for logging
+                var book = await _bookRepository.GetByIsbnAsync(isbn);
+                
+                var deleted = await _bookRepository.DeleteByIsbnAsync(isbn);
 
                 if (!deleted)
                 {
                     await _systemLogger.LogWarningAsync(
                         "DELETE_BOOK",
-                        $"Attempted to delete non-existent book with ID: {id}",
+                        $"Attempted to delete non-existent book with ISBN: {isbn}",
                         "Admin"
                     );
 
                     return NotFound(new
                     {
                         success = false,
-                        message = $"Book with ID '{id}' not found"
+                        message = $"Book with ISBN '{isbn}' not found"
                     });
                 }
 
                 // Log success
                 await _systemLogger.LogSuccessAsync(
                     "DELETE_BOOK",
-                    $"Book with ID '{id}' was deleted",
+                    $"Book deleted: {book?.Title ?? "Unknown"} (ISBN: {isbn})",
                     "Admin"
                 );
 
@@ -274,11 +296,11 @@ namespace API_DigiBook.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error deleting book with ID: {Id}", id);
+                _logger.LogError(ex, "Error deleting book with ISBN: {Isbn}", isbn);
                 
                 await _systemLogger.LogErrorAsync(
                     "DELETE_BOOK",
-                    $"Error deleting book with ID '{id}': {ex.Message}",
+                    $"Error deleting book with ISBN '{isbn}': {ex.Message}",
                     "Admin"
                 );
 
@@ -447,46 +469,6 @@ namespace API_DigiBook.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting book by slug: {Slug}", slug);
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = "Error retrieving book",
-                    error = ex.Message
-                });
-            }
-        }
-
-        /// <summary>
-        /// Get book by ID
-        /// </summary>
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetBookById(string id)
-        {
-            try
-            {
-                var book = await _bookRepository.GetByIdAsync(id);
-
-                if (book == null)
-                {
-                    return NotFound(new
-                    {
-                        success = false,
-                        message = $"Book with ID '{id}' not found"
-                    });
-                }
-
-                // Increment view count when book is viewed
-                await _bookRepository.IncrementViewCountAsync(id);
-
-                return Ok(new
-                {
-                    success = true,
-                    data = book
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting book by ID: {Id}", id);
                 return StatusCode(500, new
                 {
                     success = false,

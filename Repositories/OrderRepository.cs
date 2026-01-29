@@ -45,24 +45,11 @@ namespace API_DigiBook.Repositories
         {
             try
             {
-                var query = _db.Collection(_collectionName)
-                    .WhereEqualTo("status", status)
-                    .OrderByDescending("createdAt");
-                
-                var snapshot = await query.GetSnapshotAsync();
-                var orders = new List<Order>();
-
-                foreach (var document in snapshot.Documents)
-                {
-                    if (document.Exists)
-                    {
-                        var order = document.ConvertTo<Order>();
-                        order.Id = document.Id;
-                        orders.Add(order);
-                    }
-                }
-
-                return orders;
+                // Case-insensitive status search
+                var allOrders = await GetAllAsync();
+                return allOrders
+                    .Where(o => string.Equals(o.Status, status, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(o => o.CreatedAt);
             }
             catch (Exception ex)
             {

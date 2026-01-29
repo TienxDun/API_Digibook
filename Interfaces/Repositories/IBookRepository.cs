@@ -12,5 +12,7 @@ namespace API_DigiBook.Interfaces.Repositories
         Task<IEnumerable<Book>> GetTopRatedAsync(int count = 10);
         Task<bool> IncrementViewCountAsync(string bookId);
         Task<IEnumerable<Book>> GetByIdsAsync(IEnumerable<string> bookIds);
+        Task<bool> UpdateByIsbnAsync(string isbn, Book book);
+        Task<bool> DeleteByIsbnAsync(string isbn);
     }
 }

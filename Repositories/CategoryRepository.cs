@@ -12,8 +12,18 @@ namespace API_DigiBook.Repositories
 
         public async Task<Category?> GetByNameAsync(string name)
         {
-            // Category uses name as document ID
-            return await GetByIdAsync(name);
+            try
+            {
+                // Case-insensitive category name search
+                var allCategories = await GetAllAsync();
+                return allCategories.FirstOrDefault(c => 
+                    string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting category by name {Name}", name);
+                throw;
+            }
         }
     }
 }
