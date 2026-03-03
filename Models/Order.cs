@@ -61,6 +61,18 @@ namespace API_DigiBook.Models
         [FirestoreProperty("method")]
         public string Method { get; set; } = "COD";
 
+        [FirestoreProperty("provider")]
+        public string Provider { get; set; } = "COD"; // "COD", "PayOS"
+
+        [FirestoreProperty("transactionId")]
+        public string TransactionId { get; set; } = string.Empty;
+
+        [FirestoreProperty("checkoutUrl")]
+        public string CheckoutUrl { get; set; } = string.Empty;
+
+        [FirestoreProperty("status")]
+        public string Status { get; set; } = "PENDING"; // "PENDING", "PAID", "CANCELLED", "FAILED"
+
         [FirestoreProperty("subtotal")]
         public double Subtotal { get; set; }
 
