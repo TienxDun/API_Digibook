@@ -7,7 +7,7 @@ using MimeKit;
 
 namespace API_DigiBook.Notifications.Channels
 {
-    public class SmtpEmailNotificationChannel
+    public class SmtpEmailNotificationChannel : IEmailNotificationChannel
     {
         private readonly NotificationOptions _options;
         private readonly ILogger<SmtpEmailNotificationChannel> _logger;

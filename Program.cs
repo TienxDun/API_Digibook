@@ -59,7 +59,25 @@ namespace API_DigiBook
             // Register Notification services (Observer Pattern)
             builder.Services.Configure<NotificationOptions>(builder.Configuration.GetSection("Notification"));
             builder.Services.AddHttpClient<TelegramNotificationChannel>();
+            builder.Services.AddHttpClient<ResendEmailNotificationChannel>((sp, client) =>
+            {
+                var notificationOptions = sp
+                    .GetRequiredService<Microsoft.Extensions.Options.IOptions<NotificationOptions>>()
+                    .Value;
+
+                var baseUrl = notificationOptions.Email.Resend.BaseUrl;
+                if (string.IsNullOrWhiteSpace(baseUrl))
+                {
+                    baseUrl = "https://api.resend.com";
+                }
+
+                client.BaseAddress = new Uri(baseUrl.TrimEnd('/'));
+                client.Timeout = TimeSpan.FromMilliseconds(Math.Max(1000, notificationOptions.Email.TimeoutMilliseconds));
+            });
             builder.Services.AddScoped<SmtpEmailNotificationChannel>();
+            builder.Services.AddScoped<FallbackEmailNotificationChannel>();
+            builder.Services.AddScoped<IEmailNotificationChannel>(sp =>
+                sp.GetRequiredService<FallbackEmailNotificationChannel>());
             builder.Services.AddScoped<INotificationObserver, EmailNotificationObserver>();
             builder.Services.AddScoped<INotificationObserver, TelegramNotificationObserver>();
             builder.Services.AddScoped<INotificationPublisher, NotificationPublisher>();

@@ -10,18 +10,18 @@ namespace API_DigiBook.Controllers
     [Route("api/notifications/debug")]
     public class NotificationDebugController : ControllerBase
     {
-        private readonly SmtpEmailNotificationChannel _smtpChannel;
+        private readonly IEmailNotificationChannel _emailChannel;
         private readonly INotificationLogRepository _notificationLogRepository;
         private readonly NotificationOptions _notificationOptions;
         private readonly ILogger<NotificationDebugController> _logger;
 
         public NotificationDebugController(
-            SmtpEmailNotificationChannel smtpChannel,
+            IEmailNotificationChannel emailChannel,
             INotificationLogRepository notificationLogRepository,
             IOptions<NotificationOptions> notificationOptions,
             ILogger<NotificationDebugController> logger)
         {
-            _smtpChannel = smtpChannel;
+            _emailChannel = emailChannel;
             _notificationLogRepository = notificationLogRepository;
             _notificationOptions = notificationOptions.Value;
             _logger = logger;
@@ -39,12 +39,15 @@ namespace API_DigiBook.Controllers
                 data = new
                 {
                     enableEmail = _notificationOptions.EnableEmail,
+                    provider = _notificationOptions.Email.Provider,
                     host = _notificationOptions.Email.Host,
                     port = _notificationOptions.Email.Port,
                     enableSsl = _notificationOptions.Email.EnableSsl,
                     username = _notificationOptions.Email.Username,
                     fromEmail = _notificationOptions.Email.FromEmail,
                     fromName = _notificationOptions.Email.FromName,
+                    resendBaseUrl = _notificationOptions.Email.Resend.BaseUrl,
+                    hasResendApiKey = !string.IsNullOrWhiteSpace(_notificationOptions.Email.Resend.ApiKey),
                     rawPasswordLength = rawPassword.Length,
                     normalizedPasswordLength = normalizedPassword.Length,
                     hasPassword = !string.IsNullOrWhiteSpace(normalizedPassword)
@@ -65,17 +68,17 @@ namespace API_DigiBook.Controllers
             }
 
             var subject = string.IsNullOrWhiteSpace(request.Subject)
-                ? "[DigiBook] SMTP test from Render"
+                ? "[DigiBook] Email channel test from Render"
                 : request.Subject.Trim();
 
             var body = string.IsNullOrWhiteSpace(request.HtmlBody)
                 ? "<p>This is a test email from DigiBook backend.</p>"
                 : request.HtmlBody;
 
-            var result = await _smtpChannel.SendAsync(request.ToEmail.Trim(), subject, body, cancellationToken);
+            var result = await _emailChannel.SendAsync(request.ToEmail.Trim(), subject, body, cancellationToken);
 
             _logger.LogInformation(
-                "Manual SMTP test executed. To={To}, Success={Success}, Error={Error}",
+                "Manual email channel test executed. To={To}, Success={Success}, Error={Error}",
                 request.ToEmail,
                 result.Success,
                 result.ErrorMessage);

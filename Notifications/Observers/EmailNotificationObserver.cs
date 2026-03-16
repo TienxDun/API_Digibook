@@ -10,7 +10,7 @@ namespace API_DigiBook.Notifications.Observers
 {
     public class EmailNotificationObserver : INotificationObserver
     {
-        private readonly SmtpEmailNotificationChannel _channel;
+        private readonly IEmailNotificationChannel _channel;
         private readonly INotificationLogRepository _logRepository;
         private readonly IUserRepository _userRepository;
         private readonly NotificationOptions _options;
@@ -19,7 +19,7 @@ namespace API_DigiBook.Notifications.Observers
         public string ObserverName => "EmailNotificationObserver";
 
         public EmailNotificationObserver(
-            SmtpEmailNotificationChannel channel,
+            IEmailNotificationChannel channel,
             INotificationLogRepository logRepository,
             IUserRepository userRepository,
             IOptions<NotificationOptions> options,
