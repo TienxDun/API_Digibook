@@ -6,8 +6,8 @@ namespace API_DigiBook.Repositories
 {
     public class ReviewRepository : FirestoreRepository<Review>, IReviewRepository
     {
-        public ReviewRepository(ILogger<ReviewRepository> logger) 
-            : base("reviews", logger)
+        public ReviewRepository(ICacheService cache, ILogger<ReviewRepository> logger) 
+            : base("reviews", cache, logger)
         {
         }
 

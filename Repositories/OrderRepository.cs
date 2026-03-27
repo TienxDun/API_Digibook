@@ -6,8 +6,8 @@ namespace API_DigiBook.Repositories
 {
     public class OrderRepository : FirestoreRepository<Order>, IOrderRepository
     {
-        public OrderRepository(ILogger<OrderRepository> logger) 
-            : base("orders", logger)
+        public OrderRepository(ICacheService cache, ILogger<OrderRepository> logger) 
+            : base("orders", cache, logger)
         {
         }
 

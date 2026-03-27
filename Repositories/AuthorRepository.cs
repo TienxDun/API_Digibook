@@ -5,8 +5,8 @@ namespace API_DigiBook.Repositories
 {
     public class AuthorRepository : FirestoreRepository<Author>, IAuthorRepository
     {
-        public AuthorRepository(ILogger<AuthorRepository> logger) 
-            : base("authors", logger)
+        public AuthorRepository(ICacheService cache, ILogger<AuthorRepository> logger) 
+            : base("authors", cache, logger)
         {
         }
 

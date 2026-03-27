@@ -5,8 +5,8 @@ namespace API_DigiBook.Repositories
 {
     public class CategoryRepository : FirestoreRepository<Category>, ICategoryRepository
     {
-        public CategoryRepository(ILogger<CategoryRepository> logger) 
-            : base("categories", logger)
+        public CategoryRepository(ICacheService cache, ILogger<CategoryRepository> logger) 
+            : base("categories", cache, logger)
         {
         }
 

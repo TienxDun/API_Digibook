@@ -6,8 +6,8 @@ namespace API_DigiBook.Repositories
 {
     public class UserRepository : FirestoreRepository<User>, IUserRepository
     {
-        public UserRepository(ILogger<UserRepository> logger) 
-            : base("users", logger)
+        public UserRepository(ICacheService cache, ILogger<UserRepository> logger) 
+            : base("users", cache, logger)
         {
         }
 

@@ -6,8 +6,8 @@ namespace API_DigiBook.Repositories
 {
     public class CouponRepository : FirestoreRepository<Coupon>, ICouponRepository
     {
-        public CouponRepository(ILogger<CouponRepository> logger) 
-            : base("coupons", logger)
+        public CouponRepository(ICacheService cache, ILogger<CouponRepository> logger) 
+            : base("coupons", cache, logger)
         {
         }
 

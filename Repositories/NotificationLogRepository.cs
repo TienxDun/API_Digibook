@@ -1,12 +1,13 @@
 using API_DigiBook.Interfaces.Repositories;
 using API_DigiBook.Notifications.Models;
+using API_DigiBook.Interfaces.Services;
 
 namespace API_DigiBook.Repositories
 {
     public class NotificationLogRepository : FirestoreRepository<NotificationLog>, INotificationLogRepository
     {
-        public NotificationLogRepository(ILogger<NotificationLogRepository> logger)
-            : base("notificationLogs", logger)
+        public NotificationLogRepository(ICacheService cache, ILogger<NotificationLogRepository> logger)
+            : base("notification_logs", cache, logger)
         {
         }
 
