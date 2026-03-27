@@ -1,5 +1,6 @@
 using API_DigiBook.Models;
 using API_DigiBook.Interfaces.Repositories;
+using API_DigiBook.Interfaces.Services;
 
 namespace API_DigiBook.Repositories
 {
