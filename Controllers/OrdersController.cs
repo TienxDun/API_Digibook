@@ -16,17 +16,20 @@ namespace API_DigiBook.Controllers
     {
         private readonly IOrderRepository _orderRepository;
         private readonly ILogger<OrdersController> _logger;
+        private readonly IOrderCheckoutFacade _checkoutFacade;
         private readonly CommandInvoker _commandInvoker;
         private readonly INotificationPublisher _notificationPublisher;
 
         public OrdersController(
             IOrderRepository orderRepository, 
             ILogger<OrdersController> logger,
+            IOrderCheckoutFacade checkoutFacade,
             CommandInvoker commandInvoker,
             INotificationPublisher notificationPublisher)
         {
             _orderRepository = orderRepository;
             _logger = logger;
+            _checkoutFacade = checkoutFacade;
             _commandInvoker = commandInvoker;
             _notificationPublisher = notificationPublisher;
         }
@@ -219,19 +222,11 @@ namespace API_DigiBook.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateOrder([FromBody] Order order)
         {
-            var command = new CreateOrderCommand(order, _orderRepository, _logger);
-            var result = await _commandInvoker.ExecuteAsync(command);
+            var result = await _checkoutFacade.CheckoutAsync(order);
 
             if (result.Success)
             {
                 var createdOrder = result.Data as Order;
-
-                if (createdOrder != null)
-                {
-                    var notificationEvent = NotificationEventFactory.ForOrderCreated(createdOrder);
-                    await PublishSafelyAsync(notificationEvent);
-                }
-
                 return CreatedAtAction(nameof(GetOrderById), new { id = createdOrder?.Id }, new
                 {
                     success = true,

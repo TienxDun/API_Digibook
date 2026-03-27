@@ -1,6 +1,8 @@
 using API_DigiBook.Interfaces.Repositories;
 using API_DigiBook.Interfaces.Commands;
 using Google.Cloud.Firestore;
+using API_DigiBook.Factories;
+using API_DigiBook.Interfaces.States;
 
 namespace API_DigiBook.Commands.Orders
 {
@@ -34,7 +36,7 @@ namespace API_DigiBook.Commands.Orders
             try
             {
                 // Validate status
-                var validStatuses = new[] { "Đang xử lý", "Đã xác nhận", "Đang giao", "Đã giao", "Đã hủy" };
+                var validStatuses = new[] { "Đang xử lý", "Đã xác nhận", "Đang đóng gói", "Đang giao", "Đã giao", "Đã hủy", "Giao thất bại" };
                 if (!validStatuses.Contains(_newStatus))
                 {
                     return CommandResult.FailureResult($"Invalid status. Valid statuses: {string.Join(", ", validStatuses)}");
@@ -47,8 +49,9 @@ namespace API_DigiBook.Commands.Orders
                     return CommandResult.FailureResult($"Order with ID '{_orderId}' not found");
                 }
 
-                // Validate status transition
-                if (!ValidateStatusTransition(order.Status, _newStatus))
+                // Validate status transition using State Pattern
+                IOrderState currentState = OrderStateFactory.GetState(order.Status);
+                if (!currentState.CanTransitionTo(_newStatus))
                 {
                     return CommandResult.FailureResult($"Cannot change status from '{order.Status}' to '{_newStatus}'");
                 }
@@ -78,28 +81,6 @@ namespace API_DigiBook.Commands.Orders
                 _logger.LogError(ex, "Error updating order status for order {OrderId}", _orderId);
                 return CommandResult.FailureResult("Error updating order status", ex.Message);
             }
-        }
-
-        private bool ValidateStatusTransition(string currentStatus, string newStatus)
-        {
-            // Can always cancel if not already delivered
-            if (newStatus == "Đã hủy" && currentStatus != "Đã giao")
-            {
-                return true;
-            }
-
-            // Define valid transitions
-            var validTransitions = new Dictionary<string, string[]>
-            {
-                { "Đang xử lý", new[] { "Đã xác nhận", "Đã hủy" } },
-                { "Đã xác nhận", new[] { "Đang giao", "Đã hủy" } },
-                { "Đang giao", new[] { "Đã giao" } },
-                { "Đã giao", new string[] { } },
-                { "Đã hủy", new string[] { } }
-            };
-
-            return validTransitions.ContainsKey(currentStatus) && 
-                   validTransitions[currentStatus].Contains(newStatus);
         }
     }
 }

@@ -101,6 +101,9 @@ namespace API_DigiBook
             builder.Services.AddScoped<INotificationObserver, TelegramNotificationObserver>();
             builder.Services.AddScoped<INotificationPublisher, NotificationPublisher>();
             
+            // Register Facade Pattern services
+            builder.Services.AddScoped<API_DigiBook.Interfaces.Services.IOrderCheckoutFacade, API_DigiBook.Services.Orders.OrderCheckoutFacade>();
+            
             // Register Command Pattern services
             builder.Services.AddScoped<API_DigiBook.Commands.CommandInvoker>();
 
