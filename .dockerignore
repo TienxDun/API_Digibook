@@ -1,0 +1,14 @@
+# .dockerignore
+**/.git
+**/.gitignore
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/*.user
+**/*.lock.json
+.env
+firebase-credentials.json
+README.md
+PAYOS_SETUP.md
+appsettings.Development.json
