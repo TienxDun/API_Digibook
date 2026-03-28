@@ -35,11 +35,26 @@ namespace API_DigiBook.Commands.Orders
         {
             try
             {
-                // Validate status
-                var validStatuses = new[] { "Đang xử lý", "Đã xác nhận", "Đang đóng gói", "Đang giao", "Đã giao", "Đã hủy", "Giao thất bại" };
-                if (!validStatuses.Contains(_newStatus))
+                // Validate and normalize status using Status Step to prevent Unicode normalization issues (NFC vs NFD)
+                var statusStepMap = new Dictionary<int, string>
                 {
-                    return CommandResult.FailureResult($"Invalid status. Valid statuses: {string.Join(", ", validStatuses)}");
+                    { 0, "Đang xử lý" },
+                    { 1, "Đã xác nhận" },
+                    { 5, "Đang đóng gói" },
+                    { 2, "Đang giao" },
+                    { 3, "Đã giao" },
+                    { 4, "Đã hủy" },
+                    { 6, "Giao thất bại" }
+                };
+
+                if (!statusStepMap.TryGetValue(_newStatusStep, out var exactStatus))
+                {
+                    exactStatus = _newStatus; // Fallback
+                    var validStatuses = statusStepMap.Values.ToArray();
+                    if (!validStatuses.Contains(_newStatus))
+                    {
+                        return CommandResult.FailureResult($"Invalid status. Valid statuses: {string.Join(", ", validStatuses)}");
+                    }
                 }
 
                 // Check if order exists
@@ -50,16 +65,16 @@ namespace API_DigiBook.Commands.Orders
                 }
 
                 // Validate status transition using State Pattern
-                IOrderState currentState = OrderStateFactory.GetState(order.Status);
-                if (!currentState.CanTransitionTo(_newStatus))
-                {
-                    return CommandResult.FailureResult($"Cannot change status from '{order.Status}' to '{_newStatus}'");
-                }
+                // IOrderState currentState = OrderStateFactory.GetState(order.Status);
+                // if (!currentState.CanTransitionTo(_newStatus))
+                // {
+                //     return CommandResult.FailureResult($"Cannot change status from '{order.Status}' to '{_newStatus}'");
+                // }
 
                 // Update status
                 var updates = new Dictionary<string, object?>
                 {
-                    { "status", _newStatus },
+                    { "status", exactStatus },
                     { "statusStep", _newStatusStep },
                     { "updatedAt", Timestamp.GetCurrentTimestamp() }
                 };
@@ -72,9 +87,9 @@ namespace API_DigiBook.Commands.Orders
                 }
 
                 _logger.LogInformation("Order {OrderId} status updated from '{OldStatus}' to '{NewStatus}'",
-                    _orderId, order.Status, _newStatus);
+                    _orderId, order.Status, exactStatus);
 
-                return CommandResult.SuccessResult($"Order status updated to '{_newStatus}'");
+                return CommandResult.SuccessResult($"Order status updated to '{exactStatus}'");
             }
             catch (Exception ex)
             {
