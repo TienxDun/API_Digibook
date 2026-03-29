@@ -313,8 +313,8 @@ namespace API_DigiBook.Controllers
                 {
                     "title", "author", "authorId", "authorBio", "category", "price", "originalPrice",
                     "stockQuantity", "cover", "description", "isbn", "pages", "publisher", 
-                    "publishYear", "language", "badge", "isAvailable", "slug", "searchKeywords",
-                    "quantitySold", "badges", "discountRate", "images", "dimensions", 
+                    "publishYear", "language", "badge", "isAvailable", "slug", "viewCount",
+                    "searchKeywords", "reviewCount", "quantitySold", "badges", "discountRate", "images", "dimensions", 
                     "translator", "bookLayout", "manufacturer"
                 };
 

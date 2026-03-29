@@ -15,12 +15,14 @@ namespace API_DigiBook.Controllers
         private readonly ILogger<PricingController> _logger;
         private readonly LoggerService _systemLogger;
         private readonly IUserRepository _userRepository;
+        private readonly IMembershipService _membershipService;
 
-        public PricingController(ILogger<PricingController> logger, IUserRepository userRepository)
+        public PricingController(ILogger<PricingController> logger, IUserRepository userRepository, IMembershipService membershipService)
         {
             _logger = logger;
             _systemLogger = LoggerService.Instance;
             _userRepository = userRepository;
+            _membershipService = membershipService;
         }
 
         /// <summary>
@@ -245,7 +247,7 @@ namespace API_DigiBook.Controllers
             try
             {
                 // Get user to determine membership tier
-                var user = await _userRepository.GetByIdAsync(userId);
+                var user = await _membershipService.RefreshMembershipAsync(userId) ?? await _userRepository.GetByIdAsync(userId);
 
                 if (user == null)
                 {
@@ -319,7 +321,7 @@ namespace API_DigiBook.Controllers
         {
             try
             {
-                var user = await _userRepository.GetByIdAsync(userId);
+                var user = await _membershipService.RefreshMembershipAsync(userId) ?? await _userRepository.GetByIdAsync(userId);
 
                 if (user == null)
                 {
@@ -338,6 +340,24 @@ namespace API_DigiBook.Controllers
                     _ => new { name = "Regular", discount = "0%", color = "#CD7F32", benefits = new[] { "Standard pricing", "Access to promotions", "Earn points for upgrade" } }
                 };
 
+                var totalSpent = user.TotalSpent;
+                var currentTier = (user.MembershipTier ?? "regular").ToLowerInvariant();
+                var nextTier = currentTier switch
+                {
+                    "regular" => "member",
+                    "member" => "vip",
+                    _ => (string?)null
+                };
+                var nextThreshold = nextTier switch
+                {
+                    "member" => 1_000_000d,
+                    "vip" => 5_000_000d,
+                    _ => (double?)null
+                };
+                var amountToNextTier = nextThreshold.HasValue
+                    ? Math.Max(0, nextThreshold.Value - totalSpent)
+                    : 0;
+
                 return Ok(new
                 {
                     success = true,
@@ -347,8 +367,16 @@ namespace API_DigiBook.Controllers
                         userName = user.Name,
                         membershipTier = user.MembershipTier ?? "regular",
                         membershipExpiry = user.MembershipExpiry,
-                        totalSpent = user.TotalSpent,
-                        tierInfo = tierInfo
+                        totalSpent = totalSpent,
+                        tierInfo = tierInfo,
+                        thresholds = new
+                        {
+                            member = 1_000_000d,
+                            vip = 5_000_000d
+                        },
+                        nextTier = nextTier,
+                        nextTierThreshold = nextThreshold,
+                        amountToNextTier = amountToNextTier
                     }
                 });
             }

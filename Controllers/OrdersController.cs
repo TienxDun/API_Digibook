@@ -21,19 +21,22 @@ namespace API_DigiBook.Controllers
         private readonly IOrderCheckoutFacade _checkoutFacade;
         private readonly CommandInvoker _commandInvoker;
         private readonly INotificationPublisher _notificationPublisher;
+        private readonly IMembershipService _membershipService;
 
         public OrdersController(
             IOrderRepository orderRepository, 
             ILogger<OrdersController> logger,
             IOrderCheckoutFacade checkoutFacade,
             CommandInvoker commandInvoker,
-            INotificationPublisher notificationPublisher)
+            INotificationPublisher notificationPublisher,
+            IMembershipService membershipService)
         {
             _orderRepository = orderRepository;
             _logger = logger;
             _checkoutFacade = checkoutFacade;
             _commandInvoker = commandInvoker;
             _notificationPublisher = notificationPublisher;
+            _membershipService = membershipService;
         }
 
         /// <summary>
@@ -304,6 +307,11 @@ namespace API_DigiBook.Controllers
                 var updatedOrder = await _orderRepository.GetByIdAsync(id);
                 if (updatedOrder != null)
                 {
+                    if (!string.IsNullOrWhiteSpace(updatedOrder.UserId))
+                    {
+                        await _membershipService.RefreshMembershipAsync(updatedOrder.UserId);
+                    }
+
                     var notificationEvent = NotificationEventFactory.ForOrderStatusChanged(updatedOrder, previousOrder?.Status);
                     await PublishSafelyAsync(notificationEvent);
                 }
@@ -360,6 +368,12 @@ namespace API_DigiBook.Controllers
 
             if (result.Success)
             {
+                var cancelledOrder = await _orderRepository.GetByIdAsync(id);
+                if (cancelledOrder != null && !string.IsNullOrWhiteSpace(cancelledOrder.UserId))
+                {
+                    await _membershipService.RefreshMembershipAsync(cancelledOrder.UserId);
+                }
+
                 return Ok(new
                 {
                     success = true,

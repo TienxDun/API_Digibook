@@ -3,6 +3,7 @@ using API_DigiBook.Models;
 using API_DigiBook.Repositories;
 using API_DigiBook.Interfaces.Repositories;
 using API_DigiBook.Services;
+using API_DigiBook.Interfaces.Services;
 using API_DigiBook.Notifications;
 using API_DigiBook.Notifications.Contracts;
 using API_DigiBook.Notifications.Models;
@@ -20,17 +21,20 @@ namespace API_DigiBook.Controllers
         private readonly FirestoreDb _db;
         private readonly ILogger<PaymentController> _logger;
         private readonly INotificationPublisher _notificationPublisher;
+        private readonly IMembershipService _membershipService;
 
         public PaymentController(
             PaymentServiceFactory paymentFactory,
             IOrderRepository orderRepository,
             INotificationPublisher notificationPublisher,
+            IMembershipService membershipService,
             ILogger<PaymentController> logger)
         {
             _paymentFactory = paymentFactory;
             _orderRepository = orderRepository;
             _db = FirebaseService.GetFirestoreDb();
             _notificationPublisher = notificationPublisher;
+            _membershipService = membershipService;
             _logger = logger;
         }
 
@@ -170,6 +174,10 @@ namespace API_DigiBook.Controllers
                     order.StatusStep = 1; // Move to next step
                     order.UpdatedAt = Timestamp.GetCurrentTimestamp();
                     await _orderRepository.UpdateAsync(order.Id, order);
+                    if (!string.IsNullOrWhiteSpace(order.UserId))
+                    {
+                        await _membershipService.RefreshMembershipAsync(order.UserId);
+                    }
 
                     _logger.LogInformation($"Order {orderId} updated successfully to 'Đã xác nhận'");
 
@@ -260,6 +268,10 @@ namespace API_DigiBook.Controllers
 
                     order.UpdatedAt = Timestamp.GetCurrentTimestamp();
                     await _orderRepository.UpdateAsync(order.Id, order);
+                    if (!string.IsNullOrWhiteSpace(order.UserId))
+                    {
+                        await _membershipService.RefreshMembershipAsync(order.UserId);
+                    }
 
                     if (status == "PAID")
                     {

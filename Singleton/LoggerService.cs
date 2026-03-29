@@ -108,6 +108,39 @@ namespace API_DigiBook.Singleton
         }
 
         /// <summary>
+        /// Get recent logs with limit
+        /// </summary>
+        public async Task<List<SystemLog>> GetRecentLogsAsync(int limit = 50)
+        {
+            try
+            {
+                var query = _db.Collection(_collectionName)
+                    .OrderByDescending("createdAt")
+                    .Limit(limit);
+
+                var snapshot = await query.GetSnapshotAsync();
+                var logs = new List<SystemLog>();
+
+                foreach (var document in snapshot.Documents)
+                {
+                    if (document.Exists)
+                    {
+                        var log = document.ConvertTo<SystemLog>();
+                        log.Id = document.Id;
+                        logs.Add(log);
+                    }
+                }
+
+                return logs;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Failed to get recent logs: {ex.Message}");
+                return new List<SystemLog>();
+            }
+        }
+
+        /// <summary>
         /// Get all logs
         /// </summary>
         public async Task<List<SystemLog>> GetAllLogsAsync()

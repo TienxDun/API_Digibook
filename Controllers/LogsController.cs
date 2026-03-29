@@ -16,6 +16,34 @@ namespace API_DigiBook.Controllers
         }
 
         /// <summary>
+        /// Get recent system logs with limit
+        /// </summary>
+        [HttpGet("recent")]
+        public async Task<IActionResult> GetRecentLogs([FromQuery] int limit = 50)
+        {
+            try
+            {
+                var logs = await _logger.GetRecentLogsAsync(limit);
+
+                return Ok(new
+                {
+                    success = true,
+                    count = logs.Count,
+                    data = logs
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Error retrieving recent logs",
+                    error = ex.Message
+                });
+            }
+        }
+
+        /// <summary>
         /// Get all system logs
         /// </summary>
         [HttpGet]
