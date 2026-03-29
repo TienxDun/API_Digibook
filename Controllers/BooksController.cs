@@ -47,12 +47,20 @@ namespace API_DigiBook.Controllers
         {
             try
             {
-                var cacheKey = _cache.GetVersionedKey("books:all");
-                var books = await _cache.GetOrSetAsync(cacheKey, async () => 
+                List<Book>? books;
+                if (IsForceRefresh())
                 {
-                    var all = await _bookRepository.GetAllAsync();
-                    return all.ToList();
-                });
+                    books = (await _bookRepository.GetAllAsync()).ToList();
+                }
+                else
+                {
+                    var cacheKey = _cache.GetVersionedKey("books:all");
+                    books = await _cache.GetOrSetAsync(cacheKey, async () => 
+                    {
+                        var all = await _bookRepository.GetAllAsync();
+                        return all.ToList();
+                    });
+                }
 
                 return Ok(new { success = true, count = books?.Count ?? 0, data = books });
             }
@@ -494,6 +502,13 @@ namespace API_DigiBook.Controllers
             if (!updatedAt.Equals(default(Timestamp))) return updatedAt.ToDateTime();
             if (!createdAt.Equals(default(Timestamp))) return createdAt.ToDateTime();
             return DateTime.MinValue;
+        }
+
+        private bool IsForceRefresh()
+        {
+            return HttpContext.Request.Query.TryGetValue("force", out var forceValues)
+                && bool.TryParse(forceValues.FirstOrDefault(), out var force)
+                && force;
         }
     }
 }

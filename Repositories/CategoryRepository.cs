@@ -26,5 +26,10 @@ namespace API_DigiBook.Repositories
                 throw;
             }
         }
+
+        public async Task<IEnumerable<Category>> GetAllFreshAsync()
+        {
+            return await GetAllFromFirestoreAsync();
+        }
     }
 }

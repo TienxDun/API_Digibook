@@ -33,13 +33,13 @@ namespace API_DigiBook.Repositories
             if (_cache == null) return await GetAllFromFirestoreAsync();
 
             return await _cache.GetOrSetAsync(
-                GetCacheKey("all"),
+                _cache.GetVersionedKey(GetCacheKey("all")),
                 () => GetAllFromFirestoreAsync(),
                 TimeSpan.FromMinutes(10)
             ) ?? Enumerable.Empty<T>();
         }
 
-        private async Task<IEnumerable<T>> GetAllFromFirestoreAsync()
+        protected async Task<IEnumerable<T>> GetAllFromFirestoreAsync()
         {
             try
             {
@@ -81,13 +81,13 @@ namespace API_DigiBook.Repositories
             if (_cache == null) return await GetByIdFromFirestoreAsync(id);
 
             return await _cache.GetOrSetAsync(
-                GetCacheKey(id),
+                _cache.GetVersionedKey(GetCacheKey(id)),
                 () => GetByIdFromFirestoreAsync(id),
                 TimeSpan.FromMinutes(10)
             );
         }
 
-        private async Task<T?> GetByIdFromFirestoreAsync(string id)
+        protected async Task<T?> GetByIdFromFirestoreAsync(string id)
         {
             try
             {
@@ -119,7 +119,7 @@ namespace API_DigiBook.Repositories
 
         protected void ClearCache()
         {
-            _cache?.InvalidateByPrefix(_collectionName);
+            _cache?.BumpVersion(_collectionName);
         }
 
         public virtual async Task<string> AddAsync(T entity, string? customId = null)

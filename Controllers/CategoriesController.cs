@@ -33,14 +33,33 @@ namespace API_DigiBook.Controllers
         {
             try
             {
-                var version = GetCacheVersion(CategoriesVersionKey);
-                var cacheKey = $"cache:categories:all:{version}";
-                if (!_cache.TryGetValue(cacheKey, out List<Category>? categories))
+                Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+                Response.Headers["Pragma"] = "no-cache";
+                Response.Headers["Expires"] = "0";
+
+                var forceRefresh = IsForceRefresh();
+                List<Category>? categories;
+
+                if (forceRefresh)
                 {
-                    categories = (await _categoryRepository.GetAllAsync()).ToList();
-                    _cache.Set(cacheKey, categories, TimeSpan.FromMinutes(CacheMinutes));
-                    CacheReadMonitor.Record("categories:all", _logger);
+                    categories = (await _categoryRepository.GetAllFreshAsync()).ToList();
                 }
+                else
+                {
+                    var version = GetCacheVersion(CategoriesVersionKey);
+                    var cacheKey = $"cache:categories:all:{version}";
+                    if (!_cache.TryGetValue(cacheKey, out categories))
+                    {
+                        categories = (await _categoryRepository.GetAllAsync()).ToList();
+                        _cache.Set(cacheKey, categories, TimeSpan.FromMinutes(CacheMinutes));
+                        CacheReadMonitor.Record("categories:all", _logger);
+                    }
+                }
+
+                _logger.LogInformation(
+                    "GetAllCategories served {Count} categories (force={ForceRefresh})",
+                    categories?.Count ?? 0,
+                    forceRefresh);
                 
                 return Ok(new
                 {
@@ -197,10 +216,12 @@ namespace API_DigiBook.Controllers
         {
             try
             {
+                _logger.LogInformation("DeleteCategory requested for '{CategoryName}'", name);
                 var deleted = await _categoryRepository.DeleteAsync(name);
 
                 if (!deleted)
                 {
+                    _logger.LogWarning("DeleteCategory could not find '{CategoryName}'", name);
                     return NotFound(new
                     {
                         success = false,
@@ -209,6 +230,11 @@ namespace API_DigiBook.Controllers
                 }
 
                 BumpCacheVersion(CategoriesVersionKey);
+                var remainingCategories = await _categoryRepository.GetAllFreshAsync();
+                _logger.LogInformation(
+                    "DeleteCategory succeeded for '{CategoryName}'. Remaining categories: {Count}",
+                    name,
+                    remainingCategories.Count());
 
                 return Ok(new
                 {
@@ -323,6 +349,13 @@ namespace API_DigiBook.Controllers
         private void BumpCacheVersion(string key)
         {
             _cache.Set(key, Guid.NewGuid().ToString("N"), TimeSpan.FromMinutes(CacheMinutes));
+        }
+
+        private bool IsForceRefresh()
+        {
+            return HttpContext.Request.Query.TryGetValue("force", out var forceValues)
+                && bool.TryParse(forceValues.FirstOrDefault(), out var force)
+                && force;
         }
     }
 }

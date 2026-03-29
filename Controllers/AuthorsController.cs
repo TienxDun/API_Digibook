@@ -34,13 +34,23 @@ namespace API_DigiBook.Controllers
         {
             try
             {
-                var version = GetCacheVersion(AuthorsVersionKey);
-                var cacheKey = $"cache:authors:all:{version}";
-                if (!_cache.TryGetValue(cacheKey, out List<Author>? authors))
+                var forceRefresh = IsForceRefresh();
+                List<Author>? authors;
+
+                if (forceRefresh)
                 {
                     authors = (await _authorRepository.GetAllAsync()).ToList();
-                    _cache.Set(cacheKey, authors, TimeSpan.FromMinutes(CacheMinutes));
-                    CacheReadMonitor.Record("authors:all", _logger);
+                }
+                else
+                {
+                    var version = GetCacheVersion(AuthorsVersionKey);
+                    var cacheKey = $"cache:authors:all:{version}";
+                    if (!_cache.TryGetValue(cacheKey, out authors))
+                    {
+                        authors = (await _authorRepository.GetAllAsync()).ToList();
+                        _cache.Set(cacheKey, authors, TimeSpan.FromMinutes(CacheMinutes));
+                        CacheReadMonitor.Record("authors:all", _logger);
+                    }
                 }
 
                 return Ok(new
@@ -385,6 +395,13 @@ namespace API_DigiBook.Controllers
         private void BumpCacheVersion(string key)
         {
             _cache.Set(key, Guid.NewGuid().ToString("N"), TimeSpan.FromMinutes(CacheMinutes));
+        }
+
+        private bool IsForceRefresh()
+        {
+            return HttpContext.Request.Query.TryGetValue("force", out var forceValues)
+                && bool.TryParse(forceValues.FirstOrDefault(), out var force)
+                && force;
         }
     }
 }

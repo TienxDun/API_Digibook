@@ -30,12 +30,20 @@ namespace API_DigiBook.Controllers
         {
             try
             {
-                var cacheKey = _cache.GetVersionedKey("users:all");
-                var users = await _cache.GetOrSetAsync(cacheKey, async () => 
+                List<User>? users;
+                if (IsForceRefresh())
                 {
-                    var all = await _userRepository.GetAllAsync();
-                    return all.ToList();
-                });
+                    users = (await _userRepository.GetAllAsync()).ToList();
+                }
+                else
+                {
+                    var cacheKey = _cache.GetVersionedKey("users:all");
+                    users = await _cache.GetOrSetAsync(cacheKey, async () => 
+                    {
+                        var all = await _userRepository.GetAllAsync();
+                        return all.ToList();
+                    });
+                }
 
                 return Ok(new
                 {
@@ -518,6 +526,13 @@ namespace API_DigiBook.Controllers
                 }
             }
             return null;
+        }
+
+        private bool IsForceRefresh()
+        {
+            return HttpContext.Request.Query.TryGetValue("force", out var forceValues)
+                && bool.TryParse(forceValues.FirstOrDefault(), out var force)
+                && force;
         }
     }
 }

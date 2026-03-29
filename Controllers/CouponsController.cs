@@ -33,13 +33,23 @@ namespace API_DigiBook.Controllers
         {
             try
             {
-                var version = GetCacheVersion(CouponsVersionKey);
-                var cacheKey = $"cache:coupons:all:{version}";
-                if (!_cache.TryGetValue(cacheKey, out List<Coupon>? coupons))
+                var forceRefresh = IsForceRefresh();
+                List<Coupon>? coupons;
+
+                if (forceRefresh)
                 {
                     coupons = (await _couponRepository.GetAllAsync()).ToList();
-                    _cache.Set(cacheKey, coupons, TimeSpan.FromMinutes(CacheMinutes));
-                    CacheReadMonitor.Record("coupons:all", _logger);
+                }
+                else
+                {
+                    var version = GetCacheVersion(CouponsVersionKey);
+                    var cacheKey = $"cache:coupons:all:{version}";
+                    if (!_cache.TryGetValue(cacheKey, out coupons))
+                    {
+                        coupons = (await _couponRepository.GetAllAsync()).ToList();
+                        _cache.Set(cacheKey, coupons, TimeSpan.FromMinutes(CacheMinutes));
+                        CacheReadMonitor.Record("coupons:all", _logger);
+                    }
                 }
 
                 return Ok(new
@@ -488,6 +498,13 @@ namespace API_DigiBook.Controllers
         private void BumpCacheVersion(string key)
         {
             _cache.Set(key, Guid.NewGuid().ToString("N"), TimeSpan.FromMinutes(CacheMinutes));
+        }
+
+        private bool IsForceRefresh()
+        {
+            return HttpContext.Request.Query.TryGetValue("force", out var forceValues)
+                && bool.TryParse(forceValues.FirstOrDefault(), out var force)
+                && force;
         }
     }
 
