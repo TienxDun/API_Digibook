@@ -62,6 +62,7 @@ namespace API_DigiBook
             builder.Services.AddScoped<API_DigiBook.Interfaces.Repositories.ICouponRepository, API_DigiBook.Repositories.CouponRepository>();
             builder.Services.AddScoped<API_DigiBook.Interfaces.Repositories.INotificationLogRepository, API_DigiBook.Repositories.NotificationLogRepository>();
             builder.Services.AddScoped<IMembershipService, MembershipService>();
+            builder.Services.AddHttpClient();
             
             // Register Payment services
             builder.Services.AddHttpClient<API_DigiBook.Services.Payment.PayOSService>();

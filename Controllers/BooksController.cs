@@ -7,6 +7,7 @@ using API_DigiBook.Services;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 using API_DigiBook.Interfaces.Services;
+using System.Text.RegularExpressions;
 
 namespace API_DigiBook.Controllers
 {
@@ -123,6 +124,7 @@ namespace API_DigiBook.Controllers
         {
             try
             {
+                book = SanitizeBook(book);
                 book.CreatedAt = Timestamp.GetCurrentTimestamp();
                 book.UpdatedAt = Timestamp.GetCurrentTimestamp();
 
@@ -145,6 +147,7 @@ namespace API_DigiBook.Controllers
         {
             try
             {
+                book = SanitizeBook(book);
                 book.Isbn = isbn;
                 book.UpdatedAt = Timestamp.GetCurrentTimestamp();
                 var updated = await _bookRepository.UpdateByIsbnAsync(isbn, book);
@@ -329,6 +332,7 @@ namespace API_DigiBook.Controllers
                 var filteredUpdates = updateDict
                     .Where(kvp => allowedFields.Contains(kvp.Key))
                     .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                filteredUpdates = SanitizeBookUpdates(filteredUpdates);
 
                 if (filteredUpdates.Count == 0)
                 {
@@ -502,6 +506,273 @@ namespace API_DigiBook.Controllers
             if (!updatedAt.Equals(default(Timestamp))) return updatedAt.ToDateTime();
             if (!createdAt.Equals(default(Timestamp))) return createdAt.ToDateTime();
             return DateTime.MinValue;
+        }
+
+        private static Book SanitizeBook(Book book)
+        {
+            book.Id = NormalizeWhitespace(book.Id);
+            book.Title = NormalizeWhitespace(book.Title);
+            book.Author = NormalizeWhitespace(book.Author);
+            book.AuthorId = NormalizeWhitespace(book.AuthorId);
+            book.AuthorBio = NormalizeWhitespace(book.AuthorBio);
+            book.Category = NormalizeWhitespace(book.Category);
+            book.Price = Math.Max(0, book.Price);
+            book.OriginalPrice = Math.Max(book.Price, book.OriginalPrice);
+            book.StockQuantity = Math.Max(0, book.StockQuantity);
+            book.Rating = Math.Max(0, book.Rating);
+            book.Cover = NormalizeWhitespace(book.Cover);
+            book.Description = NormalizeDescription(book.Description);
+            book.Isbn = NormalizeWhitespace(book.Isbn);
+            book.Pages = Math.Max(0, book.Pages);
+            book.Publisher = NormalizeWhitespace(book.Publisher);
+            book.PublishYear = Math.Max(0, book.PublishYear);
+            book.Language = string.IsNullOrWhiteSpace(book.Language) ? "Tiếng Việt" : NormalizeWhitespace(book.Language);
+            book.Badge = NormalizeWhitespace(book.Badge);
+            book.Slug = NormalizeWhitespace(book.Slug);
+            book.ViewCount = Math.Max(0, book.ViewCount);
+            book.ReviewCount = Math.Max(0, book.ReviewCount);
+            book.DiscountRate = Math.Max(0, book.DiscountRate);
+            book.Images = SanitizeStringList(book.Images);
+            book.Dimensions = NormalizeWhitespace(book.Dimensions);
+            book.Translator = NormalizeWhitespace(book.Translator);
+            book.BookLayout = NormalizeWhitespace(book.BookLayout);
+            book.Manufacturer = NormalizeWhitespace(book.Manufacturer);
+            book.SearchKeywords = SanitizeStringList(book.SearchKeywords);
+
+            if (book.QuantitySold != null)
+            {
+                book.QuantitySold.Text = NormalizeWhitespace(book.QuantitySold.Text);
+                book.QuantitySold.Value = Math.Max(0, book.QuantitySold.Value);
+                if (string.IsNullOrWhiteSpace(book.QuantitySold.Text) && book.QuantitySold.Value > 0)
+                {
+                    book.QuantitySold.Text = $"{book.QuantitySold.Value} đã bán";
+                }
+                if (string.IsNullOrWhiteSpace(book.QuantitySold.Text) && book.QuantitySold.Value <= 0)
+                {
+                    book.QuantitySold = null;
+                }
+            }
+
+            book.Badges = (book.Badges ?? new List<BookBadge>())
+                .Where(b => b != null)
+                .Select(b => new BookBadge
+                {
+                    Code = NormalizeWhitespace(b.Code),
+                    Text = NormalizeWhitespace(b.Text),
+                    Type = NormalizeWhitespace(b.Type)
+                })
+                .Where(b => !string.IsNullOrWhiteSpace(b.Code) || !string.IsNullOrWhiteSpace(b.Text) || !string.IsNullOrWhiteSpace(b.Type))
+                .GroupBy(b => $"{b.Code}|{b.Text}|{b.Type}", StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+
+            if (string.IsNullOrWhiteSpace(book.Badge) && book.DiscountRate > 0)
+            {
+                book.Badge = $"-{Math.Round(book.DiscountRate)}%";
+            }
+
+            if (string.IsNullOrWhiteSpace(book.Cover) && book.Images.Any())
+            {
+                book.Cover = book.Images.First();
+            }
+
+            if (!book.Images.Any() && !string.IsNullOrWhiteSpace(book.Cover))
+            {
+                book.Images = new List<string> { book.Cover };
+            }
+
+            return book;
+        }
+
+        private static Dictionary<string, object?> SanitizeBookUpdates(Dictionary<string, object?> updates)
+        {
+            var sanitized = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var kvp in updates)
+            {
+                switch (kvp.Key)
+                {
+                    case "title":
+                    case "author":
+                    case "authorId":
+                    case "authorBio":
+                    case "category":
+                    case "cover":
+                    case "description":
+                    case "isbn":
+                    case "publisher":
+                    case "language":
+                    case "badge":
+                    case "slug":
+                    case "dimensions":
+                    case "translator":
+                    case "bookLayout":
+                    case "manufacturer":
+                        sanitized[kvp.Key] = kvp.Key == "description"
+                            ? NormalizeDescription(kvp.Value?.ToString() ?? string.Empty)
+                            : NormalizeWhitespace(kvp.Value?.ToString() ?? string.Empty);
+                        break;
+                    case "price":
+                    case "originalPrice":
+                    case "rating":
+                    case "discountRate":
+                        sanitized[kvp.Key] = Math.Max(0, Convert.ToDouble(kvp.Value ?? 0));
+                        break;
+                    case "stockQuantity":
+                    case "pages":
+                    case "publishYear":
+                    case "viewCount":
+                    case "reviewCount":
+                        sanitized[kvp.Key] = Math.Max(0, Convert.ToInt32(kvp.Value ?? 0));
+                        break;
+                    case "searchKeywords":
+                    case "images":
+                        sanitized[kvp.Key] = SanitizeObjectStringList(kvp.Value);
+                        break;
+                    case "quantitySold":
+                        sanitized[kvp.Key] = SanitizeQuantitySold(kvp.Value);
+                        break;
+                    case "badges":
+                        sanitized[kvp.Key] = SanitizeBadges(kvp.Value);
+                        break;
+                    default:
+                        sanitized[kvp.Key] = kvp.Value;
+                        break;
+                }
+            }
+
+            if (sanitized.TryGetValue("price", out var priceObj) && sanitized.TryGetValue("originalPrice", out var originalPriceObj))
+            {
+                var price = Convert.ToDouble(priceObj ?? 0);
+                var originalPrice = Convert.ToDouble(originalPriceObj ?? 0);
+                sanitized["originalPrice"] = Math.Max(price, originalPrice);
+            }
+
+            if ((!sanitized.ContainsKey("badge") || string.IsNullOrWhiteSpace(sanitized["badge"]?.ToString()))
+                && sanitized.TryGetValue("discountRate", out var discountRateObj)
+                && Convert.ToDouble(discountRateObj ?? 0) > 0)
+            {
+                sanitized["badge"] = $"-{Math.Round(Convert.ToDouble(discountRateObj ?? 0))}%";
+            }
+
+            if (sanitized.TryGetValue("images", out var imagesObj)
+                && imagesObj is List<string> images
+                && images.Any()
+                && (!sanitized.TryGetValue("cover", out var coverObj) || string.IsNullOrWhiteSpace(coverObj?.ToString())))
+            {
+                sanitized["cover"] = images.First();
+            }
+
+            return sanitized;
+        }
+
+        private static List<string> SanitizeStringList(List<string>? values)
+        {
+            return (values ?? new List<string>())
+                .Select(NormalizeWhitespace)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static List<string> SanitizeObjectStringList(object? value)
+        {
+            if (value is IEnumerable<object> objectValues)
+            {
+                return objectValues
+                    .Select(v => NormalizeWhitespace(v?.ToString() ?? string.Empty))
+                    .Where(v => !string.IsNullOrWhiteSpace(v))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return new List<string>();
+        }
+
+        private static object? SanitizeQuantitySold(object? value)
+        {
+            if (value is Dictionary<string, object?> quantitySold)
+            {
+                var text = NormalizeWhitespace(quantitySold.TryGetValue("text", out var textObj) ? textObj?.ToString() ?? string.Empty : string.Empty);
+                var quantity = Math.Max(0, Convert.ToInt32(quantitySold.TryGetValue("value", out var valueObj) ? valueObj ?? 0 : 0));
+                if (string.IsNullOrWhiteSpace(text) && quantity > 0)
+                {
+                    text = $"{quantity} đã bán";
+                }
+                if (string.IsNullOrWhiteSpace(text) && quantity == 0)
+                {
+                    return null;
+                }
+
+                return new Dictionary<string, object?>
+                {
+                    ["text"] = text,
+                    ["value"] = quantity
+                };
+            }
+
+            return null;
+        }
+
+        private static object SanitizeBadges(object? value)
+        {
+            var sanitized = new List<Dictionary<string, object?>>();
+            if (value is IEnumerable<object> badges)
+            {
+                foreach (var badge in badges)
+                {
+                    if (badge is not Dictionary<string, object?> badgeObject) continue;
+
+                    var code = NormalizeWhitespace(badgeObject.TryGetValue("code", out var codeObj) ? codeObj?.ToString() ?? string.Empty : string.Empty);
+                    var text = NormalizeWhitespace(badgeObject.TryGetValue("text", out var textObj) ? textObj?.ToString() ?? string.Empty : string.Empty);
+                    var type = NormalizeWhitespace(badgeObject.TryGetValue("type", out var typeObj) ? typeObj?.ToString() ?? string.Empty : string.Empty);
+
+                    if (string.IsNullOrWhiteSpace(code) && string.IsNullOrWhiteSpace(text) && string.IsNullOrWhiteSpace(type))
+                    {
+                        continue;
+                    }
+
+                    sanitized.Add(new Dictionary<string, object?>
+                    {
+                        ["code"] = code,
+                        ["text"] = text,
+                        ["type"] = type
+                    });
+                }
+            }
+
+            return sanitized
+                .GroupBy(badge => $"{badge["code"]}|{badge["text"]}|{badge["type"]}", StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList();
+        }
+
+        private static string NormalizeDescription(string value)
+        {
+            var normalized = value ?? string.Empty;
+            var boilerplateIndex = normalized.IndexOf("Giá sản phẩm trên Tiki đã bao gồm thuế", StringComparison.OrdinalIgnoreCase);
+            if (boilerplateIndex >= 0)
+            {
+                normalized = normalized[..boilerplateIndex];
+            }
+
+            normalized = Regex.Replace(normalized, "<br\\s*/?>", "\n", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, "</p>", "\n\n", RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, "<[^>]*>", " ", RegexOptions.IgnoreCase);
+            normalized = normalized
+                .Replace("&nbsp;", " ", StringComparison.OrdinalIgnoreCase)
+                .Replace("&amp;", "&", StringComparison.OrdinalIgnoreCase)
+                .Replace("&lt;", "<", StringComparison.OrdinalIgnoreCase)
+                .Replace("&gt;", ">", StringComparison.OrdinalIgnoreCase)
+                .Replace("&quot;", "\"", StringComparison.OrdinalIgnoreCase);
+            normalized = Regex.Replace(normalized, @"[ \t]{2,}", " ");
+            normalized = Regex.Replace(normalized, @"\n{3,}", "\n\n");
+            return normalized.Trim();
+        }
+
+        private static string NormalizeWhitespace(string value)
+        {
+            return Regex.Replace(value ?? string.Empty, @"\s+", " ").Trim();
         }
 
         private bool IsForceRefresh()
