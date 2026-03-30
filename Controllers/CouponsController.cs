@@ -12,15 +12,17 @@ namespace API_DigiBook.Controllers
     public class CouponsController : ControllerBase
     {
         private readonly ICouponRepository _couponRepository;
+        private readonly IUserRepository _userRepository;
         private readonly ILogger<CouponsController> _logger;
         private readonly IMemoryCache _cache;
 
         private const int CacheMinutes = 2;
         private const string CouponsVersionKey = "cache:coupons:version";
 
-        public CouponsController(ICouponRepository couponRepository, ILogger<CouponsController> logger, IMemoryCache cache)
+        public CouponsController(ICouponRepository couponRepository, IUserRepository userRepository, ILogger<CouponsController> logger, IMemoryCache cache)
         {
             _couponRepository = couponRepository;
+            _userRepository = userRepository;
             _logger = logger;
             _cache = cache;
         }
@@ -239,6 +241,43 @@ namespace API_DigiBook.Controllers
                     {
                         success = false,
                         message = $"Minimum order value is {coupon.MinOrderValue:N0} VND"
+                    });
+                }
+
+                // New Constraints Check
+                if (!string.IsNullOrEmpty(request.UserId))
+                {
+                    var user = await _userRepository.GetByIdAsync(request.UserId);
+                    if (user != null)
+                    {
+                        // 1. One-time per user check
+                        if (coupon.IsOneTimePerUser && user.UsedCouponIds != null && user.UsedCouponIds.Contains(coupon.Id))
+                        {
+                            return BadRequest(new
+                            {
+                                success = false,
+                                message = "Bạn đã sử dụng mã giảm giá này rồi."
+                            });
+                        }
+
+                        // 2. First order only check
+                        if (coupon.IsFirstOrderOnly && user.TotalSpent > 0)
+                        {
+                            return BadRequest(new
+                            {
+                                success = false,
+                                message = "Mã giảm giá này chỉ dành cho đơn hàng đầu tiên."
+                            });
+                        }
+                    }
+                }
+                else if (coupon.IsFirstOrderOnly || coupon.IsOneTimePerUser)
+                {
+                    // If no UserId, but coupon requires user checks
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Vui lòng đăng nhập để sử dụng mã giảm giá này."
                     });
                 }
 
@@ -511,6 +550,7 @@ namespace API_DigiBook.Controllers
     public class ValidateCouponRequest
     {
         public string Code { get; set; } = string.Empty;
+        public string? UserId { get; set; }
         public double OrderTotal { get; set; }
     }
 }

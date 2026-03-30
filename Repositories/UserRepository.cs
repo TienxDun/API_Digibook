@@ -308,5 +308,41 @@ namespace API_DigiBook.Repositories
                 throw;
             }
         }
+
+        // Coupon Management
+        public async Task<bool> AddUsedCouponAsync(string userId, string couponId)
+        {
+            try
+            {
+                var docRef = _db.Collection(_collectionName).Document(userId);
+                var snapshot = await docRef.GetSnapshotAsync();
+
+                if (!snapshot.Exists)
+                {
+                    return false;
+                }
+
+                var user = snapshot.ConvertTo<User>();
+                
+                if (user.UsedCouponIds == null)
+                {
+                    user.UsedCouponIds = new List<string>();
+                }
+
+                if (!user.UsedCouponIds.Contains(couponId))
+                {
+                    user.UsedCouponIds.Add(couponId);
+                    user.UpdatedAt = Timestamp.GetCurrentTimestamp();
+                    await docRef.SetAsync(user, SetOptions.MergeAll);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error adding coupon {CouponId} to used list for user {UserId}", couponId, userId);
+                throw;
+            }
+        }
     }
 }

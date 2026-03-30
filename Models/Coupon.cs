@@ -32,6 +32,12 @@ namespace API_DigiBook.Models
         [FirestoreProperty("isActive")]
         public bool IsActive { get; set; } = true;
 
+        [FirestoreProperty("isFirstOrderOnly")]
+        public bool IsFirstOrderOnly { get; set; } = false;
+
+        [FirestoreProperty("isOneTimePerUser")]
+        public bool IsOneTimePerUser { get; set; } = false;
+
         [FirestoreProperty("updatedAt")]
         public Timestamp UpdatedAt { get; set; }
     }

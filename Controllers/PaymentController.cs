@@ -18,6 +18,8 @@ namespace API_DigiBook.Controllers
     {
         private readonly PaymentServiceFactory _paymentFactory;
         private readonly IOrderRepository _orderRepository;
+        private readonly ICouponRepository _couponRepository;
+        private readonly IUserRepository _userRepository;
         private readonly FirestoreDb _db;
         private readonly ILogger<PaymentController> _logger;
         private readonly INotificationPublisher _notificationPublisher;
@@ -26,12 +28,16 @@ namespace API_DigiBook.Controllers
         public PaymentController(
             PaymentServiceFactory paymentFactory,
             IOrderRepository orderRepository,
+            ICouponRepository couponRepository,
+            IUserRepository userRepository,
             INotificationPublisher notificationPublisher,
             IMembershipService membershipService,
             ILogger<PaymentController> logger)
         {
             _paymentFactory = paymentFactory;
             _orderRepository = orderRepository;
+            _couponRepository = couponRepository;
+            _userRepository = userRepository;
             _db = FirebaseService.GetFirestoreDb();
             _notificationPublisher = notificationPublisher;
             _membershipService = membershipService;
@@ -177,6 +183,8 @@ namespace API_DigiBook.Controllers
                     if (!string.IsNullOrWhiteSpace(order.UserId))
                     {
                         await _membershipService.RefreshMembershipAsync(order.UserId);
+                        // Consume coupon if applied
+                        await ConsumeCouponAsync(order);
                     }
 
                     _logger.LogInformation($"Order {orderId} updated successfully to 'Đã xác nhận'");
@@ -271,6 +279,12 @@ namespace API_DigiBook.Controllers
                     if (!string.IsNullOrWhiteSpace(order.UserId))
                     {
                         await _membershipService.RefreshMembershipAsync(order.UserId);
+                        
+                        if (status == "PAID")
+                        {
+                            // Consume coupon if applied
+                            await ConsumeCouponAsync(order);
+                        }
                     }
 
                     if (status == "PAID")
@@ -286,6 +300,35 @@ namespace API_DigiBook.Controllers
             {
                 _logger.LogError(ex, "Error processing webhook");
                 return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
+        private async Task ConsumeCouponAsync(Order order)
+        {
+            if (order != null && order.Payment != null && !string.IsNullOrEmpty(order.Payment.AppliedCouponCode))
+            {
+                try
+                {
+                    var coupon = await _couponRepository.GetByCodeAsync(order.Payment.AppliedCouponCode);
+                    if (coupon != null)
+                    {
+                        // 1. Increment global usage
+                        await _couponRepository.IncrementUsageAsync(coupon.Id);
+
+                        // 2. Track usage for user
+                        if (!string.IsNullOrEmpty(order.UserId))
+                        {
+                            await _userRepository.AddUsedCouponAsync(order.UserId, coupon.Id);
+                        }
+                        
+                        _logger.LogInformation($"Coupon {coupon.Code} (ID: {coupon.Id}) consumed for order {order.Id}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error consuming coupon {CouponCode} for order {OrderId}", 
+                        order.Payment.AppliedCouponCode, order.Id);
+                }
             }
         }
 

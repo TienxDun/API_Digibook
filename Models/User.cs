@@ -53,6 +53,9 @@ namespace API_DigiBook.Models
         [FirestoreProperty("wishlistIds")]
         public List<string> WishlistIds { get; set; } = new List<string>();
 
+        [FirestoreProperty("usedCouponIds")]
+        public List<string> UsedCouponIds { get; set; } = new List<string>();
+
         [FirestoreProperty("createdAt")]
         public Timestamp CreatedAt { get; set; }
 

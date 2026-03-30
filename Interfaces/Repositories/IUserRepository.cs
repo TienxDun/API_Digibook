@@ -18,5 +18,8 @@ namespace API_DigiBook.Interfaces.Repositories
         Task<bool> AddToWishlistAsync(string userId, string bookId);
         Task<bool> RemoveFromWishlistAsync(string userId, string bookId);
         Task<List<string>> GetWishlistAsync(string userId);
+
+        // Coupon management
+        Task<bool> AddUsedCouponAsync(string userId, string couponId);
     }
 }

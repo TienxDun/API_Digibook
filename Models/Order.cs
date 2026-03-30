@@ -82,6 +82,9 @@ namespace API_DigiBook.Models
         [FirestoreProperty("couponDiscount")]
         public double CouponDiscount { get; set; }
 
+        [FirestoreProperty("appliedCouponCode")]
+        public string AppliedCouponCode { get; set; } = string.Empty;
+
         [FirestoreProperty("total")]
         public double Total { get; set; }
     }
