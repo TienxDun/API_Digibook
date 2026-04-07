@@ -138,6 +138,7 @@ namespace API_DigiBook.Notifications.Channels
                         $"Fallback Resend accepted after SMTP and Gmail API failures: {primarySmtp.ErrorMessage} | {gmailApiFallback.ErrorMessage}");
                 }
 
+
                 return NotificationChannelResult.Fail(
                     $"SMTP failed: {primarySmtp.ErrorMessage} | Gmail API fallback failed: {gmailApiFallback.ErrorMessage} | Resend fallback failed: {resendThirdFallback.ErrorMessage}");
             }
