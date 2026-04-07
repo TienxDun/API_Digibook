@@ -8,6 +8,7 @@ using API_DigiBook.Commands.Orders;
 using API_DigiBook.Notifications;
 using API_DigiBook.Notifications.Contracts;
 using API_DigiBook.Factories;
+using API_DigiBook.Builders;
 
 namespace API_DigiBook.Services.Orders
 {
@@ -67,26 +68,27 @@ namespace API_DigiBook.Services.Orders
                     {
                         var baseUrl = _configuration["App:BaseUrl"] ?? "http://localhost:5173";
                         
-                        var paymentRequest = new PaymentRequest
-                        {
-                            OrderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), // PayOS requires unique numeric order code
-                            Amount = createdOrder.Payment.Total,
-                            Description = $"Thanh toan don hang {createdOrder.Id}",
-                            ReturnUrl = $"{baseUrl}/order-success?orderId={createdOrder.Id}",
-                            CancelUrl = $"{baseUrl}/cart",
-                            Customer = new Models.CustomerInfo
+                        // Builder Pattern: Fluent construction of PaymentRequest
+                        var paymentRequest = new PaymentRequestBuilder()
+                            .WithOrderDetails(
+                                createdOrder.Id,
+                                createdOrder.Payment.Total,
+                                $"Thanh toan don hang {createdOrder.Id}")
+                            .WithUrls(baseUrl, createdOrder.Id)
+                            .WithCustomer(new CustomerInfo
                             {
                                 Name = createdOrder.Customer.Name,
                                 Email = createdOrder.Customer.Email,
                                 Phone = createdOrder.Customer.Phone
-                            },
-                            Items = createdOrder.Items.Select(i => new Models.PaymentItem
+                            })
+                            .WithItems(createdOrder.Items.Select(i => new PaymentItem
                             {
                                 Name = i.Title,
                                 Quantity = i.Quantity,
                                 Price = i.PriceAtPurchase
-                            }).ToList()
-                        };
+                            }))
+                            .Build();
+
 
                         var paymentResponse = await paymentService.CreatePaymentLinkAsync(paymentRequest);
                         if (paymentResponse.Success)

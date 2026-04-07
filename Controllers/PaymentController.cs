@@ -170,24 +170,45 @@ namespace API_DigiBook.Controllers
                 // Verify payment
                 var verification = await paymentService.VerifyPaymentAsync(paymentLinkId);
 
-                // Cập nhật order status nếu đã thanh toán
-                if (verification.IsValid && verification.Status == "PAID")
+                // Cập nhật order theo trạng thái thanh toán trả về
+                if (verification.IsValid)
                 {
-                    _logger.LogInformation($"Payment PAID for order {orderId}. Updating order status...");
-                    
-                    order.Payment.Status = "PAID";
-                    order.Status = "Đã xác nhận"; // Update main order status
-                    order.StatusStep = 1; // Move to next step
+                    var paymentStatus = verification.Status?.Trim().ToUpperInvariant() ?? "PENDING";
+                    var shouldPublishPaidNotification = false;
+
+                    switch (paymentStatus)
+                    {
+                        case "PAID":
+                            _logger.LogInformation("Payment PAID for order {OrderId}. Updating order status...", orderId);
+                            order.Payment.Status = "PAID";
+                            order.Status = "Đã xác nhận";
+                            order.StatusStep = 1;
+                            shouldPublishPaidNotification = true;
+                            break;
+                        case "CANCELLED":
+                        case "FAILED":
+                            _logger.LogInformation("Payment {PaymentStatus} for order {OrderId}. Marking order as cancelled.", paymentStatus, orderId);
+                            order.Payment.Status = paymentStatus;
+                            order.Status = "Đã hủy";
+                            order.StatusStep = 4;
+                            break;
+                        default:
+                            order.Payment.Status = paymentStatus;
+                            break;
+                    }
+
                     order.UpdatedAt = Timestamp.GetCurrentTimestamp();
                     await _orderRepository.UpdateAsync(order.Id, order);
+
                     if (!string.IsNullOrWhiteSpace(order.UserId))
                     {
                         await _membershipService.RefreshMembershipAsync(order.UserId);
-                        // Consume coupon if applied
-                        await ConsumeCouponAsync(order);
+                        if (shouldPublishPaidNotification)
+                        {
+                            // Consume coupon if applied only when payment is successful
+                            await ConsumeCouponAsync(order);
+                        }
                     }
-
-                    _logger.LogInformation($"Order {orderId} updated successfully to 'Đã xác nhận'");
 
                     // Cập nhật transaction
                     var query = _db.Collection("PaymentTransactions")
@@ -199,14 +220,20 @@ namespace API_DigiBook.Controllers
                     {
                         var doc = snapshot.Documents.First();
                         var transaction = doc.ConvertTo<PaymentTransaction>();
-                        transaction.Status = "PAID";
-                        transaction.PaidAt = Timestamp.GetCurrentTimestamp();
+                        transaction.Status = paymentStatus;
+                        if (paymentStatus == "PAID")
+                        {
+                            transaction.PaidAt = Timestamp.GetCurrentTimestamp();
+                        }
                         transaction.UpdatedAt = Timestamp.GetCurrentTimestamp();
                         await _db.Collection("PaymentTransactions").Document(doc.Id).SetAsync(transaction);
                     }
 
-                    var notificationEvent = NotificationEventFactory.ForPaymentPaid(order);
-                    await PublishSafelyAsync(notificationEvent);
+                    if (shouldPublishPaidNotification)
+                    {
+                        var notificationEvent = NotificationEventFactory.ForPaymentPaid(order);
+                        await PublishSafelyAsync(notificationEvent);
+                    }
                 }
 
                 return Ok(verification);
@@ -262,20 +289,32 @@ namespace API_DigiBook.Controllers
                 // Cập nhật order status
                 if (callbackData.ContainsKey("status"))
                 {
-                    var status = callbackData["status"];
+                    var status = callbackData["status"]?.Trim().ToUpperInvariant() ?? "PENDING";
                     order.Payment.Status = status;
                     
                     if (status == "PAID")
                     {
-                        order.Status = "Đã thanh toán";
+                        order.Status = "Đã xác nhận";
+                        order.StatusStep = 1;
                     }
-                    else if (status == "CANCELLED")
+                    else if (status == "CANCELLED" || status == "FAILED")
                     {
                         order.Status = "Đã hủy";
+                        order.StatusStep = 4;
                     }
 
                     order.UpdatedAt = Timestamp.GetCurrentTimestamp();
                     await _orderRepository.UpdateAsync(order.Id, order);
+
+                    // Đồng bộ transaction theo trạng thái callback
+                    transaction.Status = status;
+                    if (status == "PAID")
+                    {
+                        transaction.PaidAt = Timestamp.GetCurrentTimestamp();
+                    }
+                    transaction.UpdatedAt = Timestamp.GetCurrentTimestamp();
+                    await _db.Collection("PaymentTransactions").Document(transactionDoc.Id).SetAsync(transaction);
+
                     if (!string.IsNullOrWhiteSpace(order.UserId))
                     {
                         await _membershipService.RefreshMembershipAsync(order.UserId);
