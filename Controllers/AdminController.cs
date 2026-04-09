@@ -1,5 +1,7 @@
 using API_DigiBook.Interfaces.Services;
+using API_DigiBook.Interfaces.Repositories;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 
 namespace API_DigiBook.Controllers
 {
@@ -9,16 +11,96 @@ namespace API_DigiBook.Controllers
     {
         private readonly IMembershipService _membershipService;
         private readonly ILogger<AdminController> _logger;
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ITikiService _tikiService;
+        private readonly IBookRepository _bookRepository;
+        private readonly IOrderRepository _orderRepository;
+        private readonly IUserRepository _userRepository;
+        private readonly ICategoryRepository _categoryRepository;
+        private readonly IAuthorRepository _authorRepository;
+        private readonly ICouponRepository _couponRepository;
 
         public AdminController(
             IMembershipService membershipService,
             ILogger<AdminController> logger,
-            IHttpClientFactory httpClientFactory)
+            ITikiService tikiService,
+            IBookRepository bookRepository,
+            IOrderRepository orderRepository,
+            IUserRepository userRepository,
+            ICategoryRepository categoryRepository,
+            IAuthorRepository authorRepository,
+            ICouponRepository couponRepository)
         {
             _membershipService = membershipService;
             _logger = logger;
-            _httpClientFactory = httpClientFactory;
+            _tikiService = tikiService;
+            _bookRepository = bookRepository;
+            _orderRepository = orderRepository;
+            _userRepository = userRepository;
+            _categoryRepository = categoryRepository;
+            _authorRepository = authorRepository;
+            _couponRepository = couponRepository;
+        }
+
+        [HttpGet("summary")]
+        public async Task<IActionResult> GetSummary()
+        {
+            try
+            {
+                var booksCountTask = _bookRepository.CountAsync();
+                var ordersCountTask = _orderRepository.CountAsync();
+                var usersCountTask = _userRepository.CountAsync();
+                var categoriesCountTask = _categoryRepository.CountAsync();
+                var authorsCountTask = _authorRepository.CountAsync();
+                var couponsCountTask = _couponRepository.CountAsync();
+                var revenueTask = _orderRepository.GetTotalRevenueAsync();
+                
+                var stockStatsTask = _bookRepository.GetStockStatsAsync();
+                var orderStatsTask = _orderRepository.GetOrderStatsAsync();
+                var recentOrdersTask = _orderRepository.GetRecentOrdersAsync(5);
+                var revenueByDayTask = _orderRepository.GetRevenueByDayAsync(7);
+                var topSellingTask = _bookRepository.GetTopSellingBooksAsync(5);
+
+                await Task.WhenAll(
+                    booksCountTask, ordersCountTask, usersCountTask, 
+                    categoriesCountTask, authorsCountTask, couponsCountTask, 
+                    revenueTask, stockStatsTask, orderStatsTask, 
+                    recentOrdersTask, revenueByDayTask, topSellingTask
+                );
+                
+                var (lowStock, outOfStock) = await stockStatsTask;
+                var (pendingOrders, completedOrders, todayOrders) = await orderStatsTask;
+                var totalRevenue = await revenueTask;
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        totalBooks = await booksCountTask,
+                        totalOrders = await ordersCountTask,
+                        totalUsers = await usersCountTask,
+                        totalCategories = await categoriesCountTask,
+                        totalAuthors = await authorsCountTask,
+                        totalCoupons = await couponsCountTask,
+                        totalRevenue = totalRevenue,
+                        lowStock = lowStock,
+                        outOfStock = outOfStock,
+                        pendingOrders = pendingOrders,
+                        completedOrders = completedOrders,
+                        todayOrders = todayOrders,
+                        avgOrderValue = (await ordersCountTask) > 0 ? totalRevenue / (await ordersCountTask) : 0,
+                        recentOrders = await recentOrdersTask,
+                        revenueByDay = await revenueByDayTask,
+                        topSellingBooks = await topSellingTask,
+                        maxRevenue = (await revenueByDayTask).Any() ? (await revenueByDayTask).Max(r => (double)r.total) : 0
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching admin summary");
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
 
         /// <summary>
@@ -57,58 +139,25 @@ namespace API_DigiBook.Controllers
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(url))
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Url is required."
-                    });
-                }
-
-                if (!Uri.TryCreate(url, UriKind.Absolute, out var targetUri))
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Invalid target url."
-                    });
-                }
-
-                if (!string.Equals(targetUri.Host, "tiki.vn", StringComparison.OrdinalIgnoreCase))
-                {
-                    return BadRequest(new
-                    {
-                        success = false,
-                        message = "Only tiki.vn is allowed."
-                    });
-                }
-
-                var client = _httpClientFactory.CreateClient();
-                using var request = new HttpRequestMessage(HttpMethod.Get, targetUri);
-                request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 DigiBook/1.0");
-                request.Headers.TryAddWithoutValidation("Accept", "application/json,text/plain,*/*");
-                request.Headers.TryAddWithoutValidation("Referer", "https://tiki.vn/");
-
-                using var response = await client.SendAsync(request);
-                var content = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogWarning(
-                        "Tiki proxy failed with status {StatusCode} for {TargetUrl}",
-                        (int)response.StatusCode,
-                        targetUri);
-
-                    return StatusCode((int)response.StatusCode, new
-                    {
-                        success = false,
-                        message = "Failed to fetch Tiki data.",
-                        statusCode = (int)response.StatusCode
-                    });
-                }
-
+                var content = await _tikiService.GetTikiDataAsStringAsync(url);
                 return Content(content, "application/json");
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = ex.Message
+                });
+            }
+            catch (HttpRequestException ex)
+            {
+                return StatusCode((int)(ex.StatusCode ?? System.Net.HttpStatusCode.InternalServerError), new
+                {
+                    success = false,
+                    message = "Failed to fetch Tiki data.",
+                    statusCode = (int)(ex.StatusCode ?? System.Net.HttpStatusCode.InternalServerError)
+                });
             }
             catch (Exception ex)
             {

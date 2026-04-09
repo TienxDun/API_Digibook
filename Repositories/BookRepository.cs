@@ -2,6 +2,7 @@ using API_DigiBook.Models;
 using API_DigiBook.Interfaces.Repositories;
 using API_DigiBook.Interfaces.Services;
 using Google.Cloud.Firestore;
+using System.Linq;
 
 namespace API_DigiBook.Repositories
 {
@@ -356,14 +357,70 @@ namespace API_DigiBook.Repositories
                 {
                     await docRef.UpdateAsync(updates);
                 }
+                
+                var updatedSnapshot = await docRef.GetSnapshotAsync();
+                if (!updatedSnapshot.Exists)
+                {
+                    return null;
+                }
 
-                // Fetch and return the updated book
-                return await GetByIdAsync(existingBook.Id);
+                var updatedBook = updatedSnapshot.ConvertTo<Book>();
+                updatedBook.Id = updatedSnapshot.Id;
+                return updatedBook;
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error patching book by ISBN {Isbn}", isbn);
                 throw;
+            }
+        }
+
+        public async Task<(int lowStock, int outOfStock)> GetStockStatsAsync()
+        {
+            try
+            {
+                var outOfStockTask = _db.Collection(_collectionName).WhereEqualTo("stockQuantity", 0).Count().GetSnapshotAsync();
+                var lowStockTask = _db.Collection(_collectionName).WhereLessThan("stockQuantity", 10).WhereGreaterThan("stockQuantity", 0).Count().GetSnapshotAsync();
+
+                await Task.WhenAll(outOfStockTask, lowStockTask);
+
+                return ((int)(lowStockTask.Result.Count ?? 0L), (int)(outOfStockTask.Result.Count ?? 0L));
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting stock stats");
+                return (0, 0);
+            }
+        }
+
+        public async Task<IEnumerable<dynamic>> GetTopSellingBooksAsync(int count = 5)
+        {
+            try
+            {
+                // Note: Simplified logic as we don't have a Sales tracking collection yet.
+                // We'll use reviewCount or a viewCount as a proxy or just recent books for now.
+                var query = _db.Collection(_collectionName)
+                    .OrderByDescending("reviewCount")
+                    .Limit(count);
+                
+                var snapshot = await query.GetSnapshotAsync();
+                return snapshot.Documents.Select(doc => {
+                    var book = doc.ConvertTo<Book>();
+                    book.Id = doc.Id;
+                    return new {
+                        id = book.Id,
+                        title = book.Title,
+                        cover = book.Cover,
+                        category = book.Category,
+                        salesCount = book.ReviewCount, // Using reviewCount as proxy
+                        stockQuantity = book.StockQuantity
+                    };
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error getting top selling books");
+                return Enumerable.Empty<dynamic>();
             }
         }
     }

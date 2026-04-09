@@ -7,5 +7,8 @@ namespace API_DigiBook.Interfaces.Repositories
         Task<IEnumerable<Order>> GetByUserIdAsync(string userId);
         Task<IEnumerable<Order>> GetByStatusAsync(string status);
         Task<IEnumerable<Order>> GetRecentOrdersAsync(int count = 10);
+        Task<double> GetTotalRevenueAsync();
+        Task<(int pending, int completed, int today)> GetOrderStatsAsync();
+        Task<IEnumerable<dynamic>> GetRevenueByDayAsync(int days = 7);
     }
 }
